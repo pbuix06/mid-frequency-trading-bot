@@ -1,0 +1,45 @@
+# Data — never commit raw or PIT data
+data/raw/
+data/pit/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+*.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Project docs
+CLAUDE.md
+
+# Keep gitkeeps
+!data/raw/.gitkeep
+!data/pit/.gitkeep
+!notebooks/.gitkeep

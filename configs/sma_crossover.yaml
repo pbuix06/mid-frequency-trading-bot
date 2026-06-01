@@ -1,0 +1,31 @@
+# SMA Crossover — hello-world config for Gate 0 parity test
+# Params live HERE, not in code.
+
+strategy: sma_crossover
+version: "1.0"
+
+universe:
+  symbols: ["SPY"]
+  asset_class: equity
+
+parameters:
+  fast: 20
+  slow: 50
+
+backtest:
+  init_cash: 100000
+  commission_pct: 0.001    # 10 bps round-trip
+  slippage_pct: 0.001      # 10 bps slippage model
+  freq: "1D"
+
+risk:
+  max_position_pct: 0.25
+  daily_loss_limit_pct: 0.02
+  max_drawdown_pct: 0.10
+  per_trade_risk_pct: 0.02
+
+data:
+  source: parquet           # parquet | csv
+  path: data/pit/SPY/
+  start: "2010-01-01"
+  end: "2022-12-31"         # Lock-box: 2023-01-01 onward is untouched

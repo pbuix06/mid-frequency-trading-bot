@@ -1,0 +1,4 @@
+trial_id,date,strategy,asset_universe,params_json,data_window,is_sharpe,oos_sharpe,max_dd,turnover,n_trials_so_far,notes,git_commit
+T0001,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5555,,-0.1744,,1,Gate 0 parity check,no-git
+T0002,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5421,,-0.1744,,2,Gate 0 parity check,no-git
+T0003,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5421,,-0.1744,,3,Gate 0 parity check,no-git
