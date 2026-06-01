@@ -12,10 +12,10 @@ test-critical:
 
 # Gate 0 parity check (synthetic data, no vectorbt required for basic run)
 parity:
-	python scripts/parity_check.py --synthetic
+	python3 scripts/parity_check.py --synthetic
 
 parity-vbt:
-	python scripts/parity_check.py --synthetic  # requires: pip install vectorbt
+	python3 scripts/parity_check.py --synthetic  # requires: pip install vectorbt
 
 lint:
 	ruff check mft/ tests/ scripts/

@@ -28,6 +28,9 @@ dependencies = [
     # Config & utilities
     "pyyaml>=6.0",
     "rich>=13.0",
+    # HTTP & env
+    "requests>=2.31",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

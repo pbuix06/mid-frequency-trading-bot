@@ -2,3 +2,4 @@ trial_id,date,strategy,asset_universe,params_json,data_window,is_sharpe,oos_shar
 T0001,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5555,,-0.1744,,1,Gate 0 parity check,no-git
 T0002,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5421,,-0.1744,,2,Gate 0 parity check,no-git
 T0003,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5421,,-0.1744,,3,Gate 0 parity check,no-git
+T0004,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2010-01-04:2026-05-29,0.6134,,-0.2926,,4,Gate 0 parity check,81ca75c
