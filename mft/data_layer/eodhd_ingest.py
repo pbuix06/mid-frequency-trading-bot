@@ -16,9 +16,17 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+import pandas as pd
+
 BASE_URL = "https://eodhistoricaldata.com/api"
-DEFAULT_FROM = "2010-01-01"
-MIN_BARS = 30
+DEFAULT_FROM    = "2010-01-01"   # broad universe ingest (full ~41k ticker download)
+RESEARCH_FROM   = "2000-01-01"   # Phase 3+ research instruments — full regime coverage
+MIN_BARS        = 30
+
+# Lock-box: the final 15% of the dataset.
+# Hardcoded 2022-07-01. NEVER computed dynamically — once set, immutable.
+# Everything from this date forward is the final OOS exam; do not touch.
+LOCKBOX_CUTOFF = pd.Timestamp("2022-07-01", tz="UTC")
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; MFT-research/1.0)",
@@ -165,16 +173,6 @@ def load_ticker(ticker: str, pit_dir: Path) -> pd.DataFrame:
     return pd.read_parquet(path, engine="pyarrow")
 
 
-def lockbox_cutoff(pit_dir: Path, fraction: float = 0.2) -> pd.Timestamp:
-    """
-    Compute the lock-box start date: the last `fraction` of the full date range.
-    Never pass this date as as_of in any backtest or alpha research.
-    """
-    parquets = list(pit_dir.glob("*.parquet"))
-    if not parquets:
-        raise FileNotFoundError("No parquet files found in pit_dir")
-    sample = next((p for p in parquets if p.stem == "SPY"), parquets[0])
-    df = pd.read_parquet(sample, engine="pyarrow")
-    start, end = df.index.min(), df.index.max()
-    span = end - start
-    return end - pd.Timedelta(seconds=span.total_seconds() * fraction)
+def lockbox_cutoff(*args, **kwargs) -> pd.Timestamp:
+    """Return the hardcoded lock-box cutoff. Argument accepted for backward compat."""
+    return LOCKBOX_CUTOFF

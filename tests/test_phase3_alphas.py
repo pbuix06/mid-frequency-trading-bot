@@ -300,7 +300,7 @@ class TestLowVolAnomaly:
         alpha = LowVolAnomaly(universe=universe, bottom_frac=0.20)
         window = close_df.iloc[-alpha.lookback - 1:]
         sig = alpha.compute_signal(window)
-        assert sig["QUIET"] == 1.0, f"Expected QUIET selected, got {sig}"
+        assert sig["QUIET"] > 0, f"Expected QUIET selected, got {sig}"
 
     def test_flat_on_short_window(self):
         close_df = self._make_close_df(n=10)
@@ -337,13 +337,14 @@ class TestXSMomentum:
         n_long = sum(1 for v in sig.values() if v == 1.0)
         assert n_long == 1  # top 20% of 5 = 1
 
-    def test_signals_sum_lte_one(self):
+    def test_signals_sum_to_one(self):
+        """Total long allocation must equal 1.0 (fully invested, no leverage)."""
         close_df = self._make_close_df()
         alpha = XSMomentum(universe=self.SYMBOLS, top_frac=0.40)
         window = close_df.iloc[-alpha.lookback - 1:]
         sig = alpha.compute_signal(window)
-        assert all(v in (0.0, 1.0) for v in sig.values())
-        assert sum(sig.values()) >= 1
+        total = sum(sig.values())
+        assert abs(total - 1.0) < 1e-9, f"Weights sum to {total}, expected 1.0"
 
     def test_flat_on_short_window(self):
         close_df = self._make_close_df(n=50)
@@ -383,7 +384,7 @@ class TestXSMomentum:
         alpha = XSMomentum(universe=universe, lookback=252, skip=21, top_frac=0.20)
         window = close_df.iloc[-alpha.lookback - 1:]
         sig = alpha.compute_signal(window)
-        assert sig["WINNER"] == 1.0
+        assert sig["WINNER"] > 0  # WINNER selected; weight = 1/n_long
 
 
 # ── LongShortMomentum ─────────────────────────────────────────────────────────

@@ -77,13 +77,14 @@ class XSMomentum(AlphaBase):
         returns = (lagged_price - past_price) / (past_price + 1e-10)
         ret_series = pd.Series(returns, index=available)
 
-        # Rank and select top quintile
+        # Rank and select top quintile; equal weight summing to 1.0 (no leverage)
         n_long = max(1, int(len(available) * self.top_frac))
         top_symbols = set(ret_series.nlargest(n_long).index)
+        long_w = 1.0 / n_long
 
         signals = {s: 0.0 for s in self.universe}
         for sym in top_symbols:
-            signals[sym] = 1.0
+            signals[sym] = long_w
         return signals
 
     def __repr__(self) -> str:

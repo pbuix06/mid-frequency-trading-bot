@@ -83,6 +83,7 @@ def run_research_xs(
     rebalance_freq: int = 21,
     init_cash: float = 100_000,
     commission_pct: float = 0.001,
+    end_date: "pd.Timestamp | None" = None,
 ) -> dict:
     """
     Cross-sectional research harness for multi-asset alphas (e.g. XSMomentum).
@@ -99,6 +100,10 @@ def run_research_xs(
         dict with equity_curve (pd.Series), returns (pd.Series), and
         per-symbol weight history (pd.DataFrame).
     """
+    # Enforce lock-box: truncate all series before building the common index
+    if end_date is not None:
+        multi_data = {sym: df[df.index <= end_date] for sym, df in multi_data.items()}
+
     # Align all symbols to a common index; forward-fill to handle late-start tickers
     close_dict = {sym: df["close"] for sym, df in multi_data.items()}
     close_df = pd.DataFrame(close_dict).ffill().dropna(how="all")
@@ -120,8 +125,13 @@ def run_research_xs(
         ts = close_df.index[i]
         prices = close_df.iloc[i]
 
-        # Current equity
-        portfolio_value = cash + sum(positions[s] * prices[s] for s in symbols if s in prices)
+        # Current equity — skip NaN prices (asset not yet listed / data gap)
+        pos_value = sum(
+            positions[s] * float(prices[s])
+            for s in symbols
+            if pd.notna(prices[s])
+        )
+        portfolio_value = cash + pos_value
         equity_history.append((ts, portfolio_value))
 
         # Rebalance on schedule
@@ -134,9 +144,12 @@ def run_research_xs(
 
         # Execute rebalance: adjust each symbol toward target weight
         for sym in symbols:
+            p = float(prices[sym]) if pd.notna(prices[sym]) else float("nan")
+            if not (p > 0):          # NaN, zero, or negative — skip
+                continue
             target_w = new_weights.get(sym, 0.0)
             target_val = portfolio_value * target_w
-            current_val = positions[sym] * prices.get(sym, 0.0)
+            current_val = positions[sym] * p
             delta = target_val - current_val
 
             if abs(delta) < 1.0:
@@ -144,7 +157,7 @@ def run_research_xs(
 
             commission = abs(delta) * commission_pct
             cash -= delta + commission
-            positions[sym] = target_val / prices[sym] if prices[sym] > 0 else 0.0
+            positions[sym] = target_val / p
 
         prev_weights = new_weights
 

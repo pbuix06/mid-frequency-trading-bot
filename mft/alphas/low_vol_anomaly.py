@@ -81,9 +81,11 @@ class LowVolAnomaly(AlphaBase):
         n_long = max(1, int(len(valid) * self.bottom_frac))
         low_vol_set = set(valid.nsmallest(n_long).index)
 
+        # Equal weight summing to 1.0 (no leverage)
+        long_w = 1.0 / n_long
         signals = {s: 0.0 for s in self.universe}
         for sym in low_vol_set:
-            signals[sym] = 1.0
+            signals[sym] = long_w
         return signals
 
     def __repr__(self) -> str:

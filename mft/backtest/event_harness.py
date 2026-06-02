@@ -73,6 +73,7 @@ def run_event_driven(
     commission_pct: float = 0.001,
     slippage_pct: float = 0.001,
     initial_state: "TradingState | None" = None,
+    end_date: "pd.Timestamp | None" = None,
 ) -> SimState:
     """
     Bar-by-bar event loop. Signals on bar close; orders fill on next bar open.
@@ -81,11 +82,18 @@ def run_event_driven(
     to reconcile with run_research() on the same alpha and data.
 
     Args:
+        end_date:      If set, data is truncated to bars <= end_date before
+                       running. Pass LOCKBOX_CUTOFF for all research runs to
+                       keep lock-box data untouched.
         initial_state: If provided, restores cash/positions/last_signals and
                        resumes processing from after initial_state.last_bar_ts.
                        The full data DataFrame must still be passed (the lookback
                        window before the resume point is needed for signal computation).
     """
+    # Enforce lock-box: never use data beyond end_date in any research run
+    if end_date is not None:
+        data = data[data.index <= end_date]
+
     state = SimState(cash=init_cash)
     n = len(data)
     lookback = alpha.lookback
