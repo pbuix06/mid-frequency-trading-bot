@@ -32,6 +32,11 @@ import pandas as pd
 
 from mft.alphas.base import AlphaBase
 from mft.data_layer.eodhd_ingest import load_ticker
+from mft.execution.costs import (
+    DEFAULT_COMMISSION_PCT,
+    DEFAULT_SLIPPAGE_PCT,
+    liquidity_tiered_cost,
+)
 
 # ── Panel construction ────────────────────────────────────────────────────────
 
@@ -131,28 +136,36 @@ def run_survivorship_xs(
     min_dollar_vol: float = 5_000_000,
     liq_window: int = 63,
     init_cash: float = 100_000.0,
-    commission_pct: float = 0.001,
-    slippage_pct: float = 0.001,
+    commission_pct: float = DEFAULT_COMMISSION_PCT,
+    slippage_pct: float = DEFAULT_SLIPPAGE_PCT,
+    tiered_cost: bool = False,
+    cost_multiplier: float = 1.0,
     max_daily_return: float = 1.0,
 ) -> XSResult:
     """
-    Weight-based, multiplicative-equity cross-sectional simulator.
+    Dollar-value, multiplicative-equity cross-sectional simulator.
 
-    Why weight-based (not share-accounting): tracking share counts with per-name
-    cash deltas blows up when shorting low-priced names crashing toward delisting
-    (target_value / tiny_price -> enormous share counts). The standard, stable
-    approach holds *weights* and compounds equity by the daily portfolio return
-    r_p = Σ wᵢ·rᵢ, which is bounded and cannot produce negative equity for
-    sane weights.
+    Tracks signed DOLLAR position values (not weights). A weight-renormalization
+    scheme divides by a near-zero gross on a catastrophic day (weights blow up
+    ~1000x); a share-accounting scheme blows up shorting low-priced delisting
+    names (target_value / tiny_price). Dollar tracking gives the same equity
+    (equity += Σ pvᵢ·rᵢ) with neither failure mode, and clipped returns keep
+    equity >= 0 for a book whose gross exposure <= equity.
 
     Mechanics:
-      - Target weights are set at each rebalance on the PIT-eligible universe.
-      - Between rebalances weights DRIFT with realized returns (buy-and-hold
-        between rebalances); turnover cost is charged only at rebalances on the
-        traded weight change |w_target - w_drifted|.
+      - Target dollar values are set each rebalance on the PIT-eligible universe.
+      - Between rebalances positions DRIFT with realized returns (buy-and-hold);
+        cost is charged only at rebalances, on the traded notional.
       - A name that delists mid-period stops contributing returns; its decline
-        up to delisting is realized. It is traded out at the next rebalance.
-        (Caveat: the final last-price -> 0 gap is not modeled — daily data.)
+        up to delisting is realized, and it is liquidated to cash at the next
+        rebalance. (Caveat: the final last-price -> 0 gap is not modeled.)
+
+    Costs:
+      - tiered_cost=False (default): flat (commission_pct + slippage_pct) per
+        trade on traded notional.
+      - tiered_cost=True: per-name cost from liquidity_tiered_cost(trailing ADV)
+        so illiquid names cost more than mega-caps — the honest charge for a
+        broad equity book. `cost_multiplier` scales costs for the stress test.
 
     The alpha must be constructed with the FULL candidate universe; each
     rebalance it receives a window of only the currently-eligible columns.
@@ -231,8 +244,18 @@ def run_survivorship_xs(
         # Trade to target dollar values; charge cost on traded notional.
         target_value = {t: equity * w for t, w in target_w.items()}
         names = set(pos_value) | set(target_value)
-        traded = sum(abs(target_value.get(t, 0.0) - pos_value.get(t, 0.0)) for t in names)
-        cost = (traded / equity) * (commission_pct + slippage_pct) if equity > 0 else 0.0
+        if tiered_cost:
+            # Per-name cost from trailing ADV: illiquid names cost more.
+            adv = dvol_df.iloc[max(0, i - liq_window): i + 1].mean(axis=0)
+            cost_dollars = sum(
+                abs(target_value.get(t, 0.0) - pos_value.get(t, 0.0))
+                * liquidity_tiered_cost(float(adv.get(t, 0.0)), cost_multiplier)
+                for t in names
+            )
+        else:
+            traded = sum(abs(target_value.get(t, 0.0) - pos_value.get(t, 0.0)) for t in names)
+            cost_dollars = traded * (commission_pct + slippage_pct) * cost_multiplier
+        cost = (cost_dollars / equity) if equity > 0 else 0.0
         equity *= (1.0 - cost)
         # Re-establish positions at the post-cost equity.
         pos_value = {t: equity * w for t, w in target_w.items()}

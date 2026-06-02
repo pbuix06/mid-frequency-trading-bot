@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from mft.alphas.base import AlphaBase
+from mft.execution.costs import DEFAULT_COMMISSION_PCT, DEFAULT_SLIPPAGE_PCT
 
 if TYPE_CHECKING:
     from mft.execution.state import TradingState
@@ -70,8 +71,8 @@ def run_event_driven(
     symbol: str,
     *,
     init_cash: float = 100_000,
-    commission_pct: float = 0.001,
-    slippage_pct: float = 0.001,
+    commission_pct: float = DEFAULT_COMMISSION_PCT,
+    slippage_pct: float = DEFAULT_SLIPPAGE_PCT,
     initial_state: TradingState | None = None,
     end_date: pd.Timestamp | None = None,
 ) -> SimState:

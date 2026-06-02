@@ -18,6 +18,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from mft.execution.costs import DEFAULT_COMMISSION_PCT, DEFAULT_SLIPPAGE_PCT
+
 
 @dataclass
 class Order:
@@ -73,8 +75,8 @@ class SimulatedAdapter(ExecutionAdapter):
     def __init__(
         self,
         init_cash: float = 100_000,
-        commission_pct: float = 0.001,
-        slippage_pct: float = 0.001,
+        commission_pct: float = DEFAULT_COMMISSION_PCT,
+        slippage_pct: float = DEFAULT_SLIPPAGE_PCT,
     ):
         self._cash = init_cash
         self._positions: dict[str, float] = {}

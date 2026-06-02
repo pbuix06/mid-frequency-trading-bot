@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from mft.alphas import LongShortMomentum, XSMomentum
 from mft.backtest.survivorship_harness import build_panels, run_survivorship_xs
 from mft.data_layer.eodhd_ingest import LOCKBOX_CUTOFF
-from mft.validation.diagnostics import cost_stress_curve, turnover_from_weights
+from mft.validation.diagnostics import turnover_from_weights
 from mft.validation.metrics import full_metrics
 
 PIT_DIR = Path(__file__).parents[1] / "data" / "pit"
@@ -80,21 +80,18 @@ def main() -> None:
     ]
 
     for name, alpha in specs:
-        def run_fn(commission_pct, slippage_pct, _alpha=alpha):
+        # Liquidity-TIERED costs (illiquid names cost more than mega-caps) — the
+        # honest charge for a broad equity book. Stress scales via cost_multiplier.
+        def run_at(mult, _alpha=alpha):
             return run_survivorship_xs(
                 _alpha, close_df, dvol_df,
                 rebalance_freq=21, min_dollar_vol=args.min_adv,
-                commission_pct=commission_pct, slippage_pct=slippage_pct,
-            ).returns
+                tiered_cost=True, cost_multiplier=mult,
+            )
 
-        res = run_survivorship_xs(
-            alpha, close_df, dvol_df,
-            rebalance_freq=21, min_dollar_vol=args.min_adv,
-            commission_pct=0.001, slippage_pct=0.001,
-        )
+        res = run_at(1.0)
         m = full_metrics(res.returns)
         turn = turnover_from_weights(res.weights)
-        stress = cost_stress_curve(run_fn, multipliers=(1.0, 2.0, 3.0))
 
         print(f"── {name} ──────────────────────────────────────────────")
         print(f"  avg universe: {res.avg_universe_size:.0f} names   "
@@ -102,11 +99,11 @@ def main() -> None:
         print(f"  Sharpe={m['sharpe']:.3f}  CAGR={m['cagr']:.2%}  "
               f"MaxDD={m['max_drawdown']:.2%}  Sortino={m['sortino']:.3f}")
         print(f"  annualized two-way turnover: {turn['annualized']:.1f}x")
-        print("  cost stress:")
-        for r in stress:
-            flag = "✓" if r["survives"] else "✗"
-            print(f"    {r['multiplier']:.0f}x ({r['cost_pct']*100:.1f}%/leg): "
-                  f"Sharpe={r['sharpe']:>7.3f}  {flag}")
+        print("  cost stress (liquidity-tiered, 1x/2x/3x):")
+        for mult in (1.0, 2.0, 3.0):
+            s = full_metrics(run_at(mult).returns)["sharpe"]
+            flag = "✓" if s > 0 else "✗"
+            print(f"    {mult:.0f}x tiered: Sharpe={s:>7.3f}  {flag}")
         print()
 
 

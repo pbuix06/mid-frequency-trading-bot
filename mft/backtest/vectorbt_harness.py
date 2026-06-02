@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from mft.alphas.base import AlphaBase
+from mft.execution.costs import DEFAULT_COMMISSION_PCT, DEFAULT_SLIPPAGE_PCT
 
 
 def run_research(
@@ -24,8 +25,8 @@ def run_research(
     symbol: str,
     *,
     init_cash: float = 100_000,
-    commission_pct: float = 0.001,
-    slippage_pct: float = 0.001,
+    commission_pct: float = DEFAULT_COMMISSION_PCT,
+    slippage_pct: float = DEFAULT_SLIPPAGE_PCT,
 ) -> object:
     """
     Roll alpha.compute_signal() bar-by-bar, simulate with vectorbt.
@@ -86,8 +87,8 @@ def run_research_xs(
     *,
     rebalance_freq: int = 21,
     init_cash: float = 100_000,
-    commission_pct: float = 0.001,
-    slippage_pct: float = 0.001,
+    commission_pct: float = DEFAULT_COMMISSION_PCT,
+    slippage_pct: float = DEFAULT_SLIPPAGE_PCT,
     end_date: pd.Timestamp | None = None,
 ) -> dict:
     """
