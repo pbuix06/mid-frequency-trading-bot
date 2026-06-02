@@ -79,6 +79,38 @@ def test_delisting_is_liquidated_and_equity_finite():
     assert res.avg_universe_size > 0
 
 
+def test_delisting_counted_once_across_continue_paths():
+    """A name that delists must be counted once, even if later rebalances skip."""
+    close_df, dvol_df = _panel()
+    alpha = LongShortMomentum(universe=list(close_df.columns), lookback=60, skip=5, frac=0.34)
+    res = run_survivorship_xs(
+        alpha, close_df, dvol_df,
+        rebalance_freq=21, min_dollar_vol=1.0,
+        commission_pct=0.0, slippage_pct=0.0,
+    )
+    # Exactly one name (DEAD) delists in the panel — never double-counted.
+    assert res.n_delistings == 1
+
+
+def test_equity_stays_positive_on_total_crash():
+    """A degenerate day where the whole book craters must not zero/flip equity."""
+    n = 200
+    idx = pd.date_range("2010-01-01", periods=n, freq="B", tz="UTC")
+    rng = np.random.default_rng(1)
+    closes = {}
+    for nm in ["A", "B", "C", "D", "E"]:
+        closes[nm] = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.01, n))), index=idx)
+    close_df = pd.DataFrame(closes)
+    # Crater every name -90% on one post-warmup day
+    close_df.iloc[150] = close_df.iloc[149] * 0.10
+    dvol_df = close_df * 5_000_000
+    alpha = LongShortMomentum(universe=list(close_df.columns), lookback=60, skip=5, frac=0.4)
+    res = run_survivorship_xs(alpha, close_df, dvol_df, rebalance_freq=21,
+                              min_dollar_vol=1.0, commission_pct=0.0, slippage_pct=0.0)
+    assert (res.equity > 0).all(), "equity must never go non-positive"
+    assert np.isfinite(res.final_equity)
+
+
 def test_no_lookahead_in_eligibility():
     """Eligibility at bar i must not depend on bars after i."""
     close_df, dvol_df = _panel()

@@ -67,3 +67,15 @@ def test_remove_outliers_flags_a_genuine_spike():
     out = remove_outliers(df, z_threshold=5.0, window=63, fill="ffill")
     # The spike close should be replaced by the prior (100.0), not left at 200.0
     assert out["close"].iloc[80] == 100.0
+
+
+def test_remove_outliers_ignores_tiny_move_after_flat_window():
+    """
+    After a perfectly flat (sigma≈0) window, a tiny resumption move must NOT be
+    falsely flagged — the sigma floor prevents the divide-by-~0 blowup.
+    """
+    closes = [100.0] * 100
+    closes[80] = 100.05  # +0.05% — a normal move, not an outlier
+    df = _ohlcv(closes)
+    out = remove_outliers(df, z_threshold=5.0, window=63, fill="ffill")
+    assert out["close"].iloc[80] == 100.05, "tiny move wrongly flagged after flat window"

@@ -82,7 +82,9 @@ def eligible_as_of(
     A ticker is eligible if:
       - it has a real (non-NaN) close within the last `recent_tol` bars
         (still trading — filters delisted names and phantom stale tails),
-      - it has >= lookback non-NaN closes in its history up to i,
+      - the trailing `lookback`-bar WINDOW is mostly populated (>= 90% non-NaN),
+        so the ranking is computed on contiguous real prices rather than a
+        sparse/gappy history that merely sums to `lookback` non-NaN bars,
       - its trailing `liq_window` mean dollar volume >= min_dollar_vol.
     """
     if i < lookback:
@@ -91,8 +93,10 @@ def eligible_as_of(
     recent = close_df.iloc[max(0, i - recent_tol): i + 1]
     has_recent = recent.notna().any(axis=0)
 
-    hist = close_df.iloc[: i + 1]
-    enough_hist = hist.notna().sum(axis=0) >= lookback
+    # Contiguity: the lookback window itself must be densely populated, not just
+    # the full history summing to >= lookback non-NaN bars.
+    window = close_df.iloc[i - lookback: i + 1]
+    enough_hist = window.notna().sum(axis=0) >= int(0.9 * (lookback + 1))
 
     liq = dvol_df.iloc[max(0, i - liq_window): i + 1].mean(axis=0)
     liquid = liq >= min_dollar_vol
@@ -161,32 +165,35 @@ def run_survivorship_xs(
     ret_df = close_df.pct_change(fill_method=None)
 
     equity = float(init_cash)
-    weights: dict[str, float] = {}        # current (drifted) weights by ticker
+    # Track signed DOLLAR position values (not weights). This avoids dividing by
+    # a near-zero gross during weight renormalization — the failure mode that
+    # blows weights up ~1000x on a catastrophic day. Equity update is identical
+    # (equity += Σ pvᵢ·rᵢ) but cannot explode, and with clipped returns equity
+    # stays >= 0 for a book whose gross exposure <= equity.
+    pos_value: dict[str, float] = {}
     equity_hist: list[tuple[pd.Timestamp, float]] = [(idx[0], equity)]
     weight_hist: list[dict] = []
     n_delistings = 0
     universe_sizes: list[int] = []
+    counted_dead: set[str] = set()      # names already counted as delisted (count once)
 
     for i in range(1, n):
         ts = idx[i]
         rets_today = ret_df.iloc[i]
 
-        # 1) Apply today's return to drifted weights -> portfolio return
-        port_ret = 0.0
-        if weights:
-            new_w: dict[str, float] = {}
-            for t, w in weights.items():
-                r = rets_today.get(t, np.nan)
-                r = 0.0 if (pd.isna(r) or abs(r) > max_daily_return) else float(r)
-                port_ret += w * r
-                new_w[t] = w * (1.0 + r)
-            # Renormalize drifted weights by the gross they grew into
-            gross = 1.0 + port_ret
-            if gross > 0:
-                weights = {t: wv / gross for t, wv in new_w.items()}
+        # 1) Mark positions to market. Per-name return is CLIPPED to
+        #    +/- max_daily_return (bounds, not erases, a large move / data glitch).
+        pnl = 0.0
+        for t, pv in pos_value.items():
+            r = rets_today.get(t, np.nan)
+            if pd.isna(r):
+                r = 0.0
             else:
-                weights = new_w
-        equity *= (1.0 + port_ret)
+                r = float(np.clip(r, -max_daily_return, max_daily_return))
+            pnl += pv * r
+            pos_value[t] = pv * (1.0 + r)
+        equity += pnl
+        equity = max(equity, 1e-9)        # numerical guard; clipping keeps this slack
         equity_hist.append((ts, equity))
 
         # 2) Rebalance?
@@ -197,11 +204,18 @@ def run_survivorship_xs(
             close_df, dvol_df, i,
             lookback=lookback, min_dollar_vol=min_dollar_vol, liq_window=liq_window,
         )
+        eligible_set = set(eligible)
 
-        # Count delistings: names we still hold that have died (no future bar)
-        for t, w in weights.items():
-            if w != 0.0 and t not in eligible and not _has_future_bar(close_df, t, i):
-                n_delistings += 1
+        # Prune held names no longer eligible (delisted / illiquid): their dollar
+        # value is liquidated into cash (equity unchanged — it already absorbed
+        # their returns up to delisting). Happens on EVERY rebalance, including
+        # the `continue` paths, so dead names never persist. Count each once.
+        for t in list(pos_value.keys()):
+            if t not in eligible_set:
+                if t not in counted_dead and not _has_future_bar(close_df, t, i):
+                    n_delistings += 1
+                    counted_dead.add(t)
+                del pos_value[t]
 
         if len(eligible) < 4:
             continue
@@ -214,14 +228,15 @@ def run_survivorship_xs(
         target_w = {t: v for t, v in targets.items() if v != 0.0}
         weight_hist.append({"ts": ts, **target_w})
 
-        # Turnover cost on the traded change from drifted -> target weights
-        names = set(weights) | set(target_w)
-        turnover = sum(abs(target_w.get(t, 0.0) - weights.get(t, 0.0)) for t in names)
-        cost = turnover * (commission_pct + slippage_pct)
+        # Trade to target dollar values; charge cost on traded notional.
+        target_value = {t: equity * w for t, w in target_w.items()}
+        names = set(pos_value) | set(target_value)
+        traded = sum(abs(target_value.get(t, 0.0) - pos_value.get(t, 0.0)) for t in names)
+        cost = (traded / equity) * (commission_pct + slippage_pct) if equity > 0 else 0.0
         equity *= (1.0 - cost)
+        # Re-establish positions at the post-cost equity.
+        pos_value = {t: equity * w for t, w in target_w.items()}
         equity_hist[-1] = (ts, equity)
-
-        weights = target_w
 
     equity_s = pd.Series(
         [e for _, e in equity_hist],

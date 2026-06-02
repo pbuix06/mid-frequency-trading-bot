@@ -49,6 +49,7 @@ def remove_outliers(
     z_threshold: float = 5.0,
     fill: str = "ffill",
     window: int = 63,
+    sigma_floor: float = 0.005,
 ) -> pd.DataFrame:
     """
     Detect and neutralize price outliers using a CAUSAL z-score on log returns.
@@ -63,6 +64,10 @@ def remove_outliers(
         z_threshold: Z-score above which a bar is considered an outlier.
         fill: How to handle outlier rows — "ffill" (forward-fill) or "drop".
         window: Trailing window (bars) for the rolling mean/std. Default 63 (~3mo).
+        sigma_floor: Minimum trailing daily log-return vol used in the z-score.
+            Floors sigma so that after a perfectly flat/halted window (sigma≈0)
+            a tiny resumption move is NOT falsely flagged, while a genuine huge
+            spike still trips the threshold. Default 0.005 (0.5%/day).
 
     Returns:
         Cleaned DataFrame. Outlier OHLCV values replaced by NaN then filled.
@@ -76,11 +81,18 @@ def remove_outliers(
     mu = roll.mean()
     sigma = roll.std()
 
-    z = (log_ret - mu).abs() / (sigma + 1e-10)
-    outlier_mask = (z > z_threshold).fillna(False)
+    # Floor sigma (only where it is defined) so a flat window can't blow up the
+    # z-score on a tiny move, yet a large move still trips it. Warmup bars keep
+    # NaN sigma -> z NaN -> never flagged.
+    sigma_eff = sigma.clip(lower=sigma_floor)
+    z = (log_ret - mu).abs() / sigma_eff
+    outlier_mask = ((z > z_threshold) & sigma.notna()).fillna(False)
 
-    for col in ("open", "high", "low", "close"):
-        df.loc[outlier_mask, col] = np.nan
+    # Neutralize the whole bar (price AND volume) so we never pair a forward-
+    # filled price with the original anomalous volume.
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in df.columns:
+            df.loc[outlier_mask, col] = np.nan
 
     if fill == "ffill":
         df = df.ffill()

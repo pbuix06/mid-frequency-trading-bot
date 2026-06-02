@@ -38,7 +38,7 @@ def test_turnover_full_swap_is_two():
     w = pd.DataFrame({"A": [1.0, -1.0]}, index=idx)
     t = turnover_from_weights(w)
     assert abs(t["per_rebalance_mean"] - 2.0) < 1e-9
-    assert t["n_rebalances"] == 2
+    assert t["n_transitions"] == 1  # 2 snapshots = 1 transition
 
 
 def test_turnover_no_change_is_zero():

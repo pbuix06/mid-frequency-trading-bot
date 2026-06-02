@@ -23,10 +23,20 @@ Acted on the Codex recommendations before Phase 4. All pre-lockbox, every run lo
   share-accounting build blew up shorting low-priced delisting names). The liquid
   candidate pool (≥$20M ADV, data by 2010) is 1,929 names — **35% (673) delisted
   before 2022**, exactly the bias the 19-name screen hid.
-  - **LongShortMomentum: Sharpe 0.11 (19 survivors) → 0.31 (avg 619 names,
-    survivorship-free, 2010-2022). Survives 2x and 3x cost stress.** Breadth +
-    de-biasing more than doubled it — Grinold's law in action. Now a legitimate
-    market-neutral diversifier candidate (raw MaxDD −56%, needs vol-targeting).
+  - **LongShortMomentum: Sharpe 0.11 (19 survivors) → 0.41 (avg 598 names,
+    survivorship-free, 2010-2022, corrected engine). Survives 2x and 3x cost
+    stress (0.41/0.39/0.36).** Breadth + de-biasing ~4x'd it — Grinold's law in
+    action. Now a legitimate market-neutral diversifier candidate (MaxDD −50%,
+    needs vol-targeting in Phase 5).
+
+  NOTE (post code-review): the survivorship harness was rebuilt twice. A first
+  share-accounting version blew up shorting low-priced delisting names; a
+  weight-renormalization version then divided by a near-zero `gross` on
+  catastrophic days (weights ~1000x). The final engine tracks signed DOLLAR
+  position values (no division), which is numerically stable. The study window
+  is restricted to 2010+ because the broad ingest starts then; before 2010 the
+  eligible universe is ~19 names and cross-sectional legs are too concentrated
+  to be representative (they produced a -100% early-period artifact).
   - **XSMomentum long-only: non-viable** on a broad universe (−97% MaxDD; long-only
     small-cap momentum is destroyed in crashes). Use the dollar-neutral form.
 
@@ -36,7 +46,7 @@ Acted on the Codex recommendations before Phase 4. All pre-lockbox, every run lo
 | TSMomentum(SPY) | 0.55 | single | equity trend |
 | TSMomentum(GLD) | 0.51 | single | commodity trend |
 | TSMomentum(TLT) | 0.19 | single | bond diversifier (weak standalone) |
-| LongShortMomentum | 0.31 | ~619-name survivorship-free | market-neutral, cost-robust ✓ |
+| LongShortMomentum | 0.41 | ~598-name survivorship-free (2010-22) | market-neutral, survives 3x costs ✓ |
 | ~~LowVolAnomaly~~ | rejected | — | disguised 0.65 market beta |
 | ~~XSMomentum long-only~~ | non-viable | — | −97% DD; dollar-neutral form only |
 

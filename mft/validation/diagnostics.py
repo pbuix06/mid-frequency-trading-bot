@@ -67,27 +67,29 @@ def turnover_from_weights(weights: pd.DataFrame, periods_per_year: int = 252) ->
     Turnover at each rebalance = sum(|w_t - w_{t-1}|) (two-way: a full swap of
     a 100% book = 2.0). Annualized by the average rebalance frequency.
 
-    Returns dict: per_rebalance_mean, annualized, n_rebalances.
+    Returns dict: per_rebalance_mean, annualized, n_transitions.
     """
     if weights is None or weights.empty or len(weights) < 2:
         return {"per_rebalance_mean": float("nan"), "annualized": float("nan"),
-                "n_rebalances": 0}
+                "n_transitions": 0}
 
     w = weights.fillna(0.0).sort_index()
     deltas = w.diff().abs().sum(axis=1).iloc[1:]   # drop first (no prior weights)
     per_rebalance_mean = float(deltas.mean())
 
-    # Annualize using observed average spacing between rebalances
+    # Annualize over the actual number of TRANSITIONS (len-1), not snapshots,
+    # spread over the observed span — avoids an N/(N-1) overstatement.
+    n_transitions = len(deltas)
     span_days = (w.index[-1] - w.index[0]).days
     if span_days <= 0:
-        rebals_per_year = float(len(w))
+        transitions_per_year = float(n_transitions)
     else:
-        rebals_per_year = len(w) / (span_days / 365.25)
+        transitions_per_year = n_transitions / (span_days / 365.25)
 
     return {
         "per_rebalance_mean": per_rebalance_mean,
-        "annualized": float(per_rebalance_mean * rebals_per_year),
-        "n_rebalances": int(len(w)),
+        "annualized": float(per_rebalance_mean * transitions_per_year),
+        "n_transitions": int(n_transitions),
     }
 
 

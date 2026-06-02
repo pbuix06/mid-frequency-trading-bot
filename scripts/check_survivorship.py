@@ -53,13 +53,22 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--max-names", type=int, default=800)
     p.add_argument("--min-adv", type=float, default=20_000_000)
+    p.add_argument("--start-date", default="2010-01-01",
+                   help="Study start. Default 2010-01-01: the broad ingest begins "
+                        "in 2010, so before then the eligible universe is thin "
+                        "(~19 names) and cross-sectional legs are too concentrated "
+                        "to be representative.")
     args = p.parse_args()
 
+    start = pd.Timestamp(args.start_date, tz="UTC")
     tickers = candidate_pool(args.max_names, args.min_adv)
     print(f"\nSurvivorship-free study — lock-box enforced at {LOCKBOX_CUTOFF.date()}")
     print(f"Candidate pool: {len(tickers)} liquid names (ADV>=${args.min_adv/1e6:.0f}M, data by 2010)")
     print("Building panels (no cross-death forward-fill)...")
     close_df, dvol_df = build_panels(tickers, PIT_DIR, end_date=LOCKBOX_CUTOFF)
+    # Restrict to the genuinely-broad window (breadth only exists from 2010).
+    close_df = close_df[close_df.index >= start]
+    dvol_df = dvol_df.reindex(close_df.index)
     print(f"Panel: {close_df.shape[0]} bars x {close_df.shape[1]} names, "
           f"{close_df.index[0].date()} -> {close_df.index[-1].date()}\n")
 
