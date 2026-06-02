@@ -27,7 +27,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from mft.alphas import ShortReversion, SMACrossover, TSMomentum, XSMomentum
+from mft.alphas import (
+    LowVolAnomaly, PairsMeanReversion, ShortReversion, SMACrossover, TSMomentum, XSMomentum,
+)
 from mft.backtest.vectorbt_harness import get_metrics, run_research, run_research_xs
 from mft.data_layer.eodhd_ingest import load_ticker
 from mft.monitoring.trial_log import TrialLog
@@ -41,9 +43,12 @@ ALPHA_REGISTRY = {
     "TSMomentum": TSMomentum,
     "ShortReversion": ShortReversion,
     "XSMomentum": XSMomentum,
+    "PairsMeanReversion": PairsMeanReversion,
+    "LowVolAnomaly": LowVolAnomaly,
 }
 
 SINGLE_ASSET_ALPHAS = {"SMACrossover", "TSMomentum", "ShortReversion"}
+PAIRS_ALPHAS = {"PairsMeanReversion"}
 
 
 def load_data(tickers: list[str]) -> dict[str, pd.DataFrame]:
@@ -63,8 +68,18 @@ def load_data(tickers: list[str]) -> dict[str, pd.DataFrame]:
 
 def build_alpha(alpha_name: str, tickers: list[str], params: dict):
     cls = ALPHA_REGISTRY[alpha_name]
-    if alpha_name == "XSMomentum":
+    if alpha_name in ("XSMomentum", "LowVolAnomaly"):
         return cls(universe=tickers, **params)
+    elif alpha_name == "PairsMeanReversion":
+        if len(tickers) < 2:
+            raise ValueError("PairsMeanReversion requires exactly 2 tickers")
+        return cls(
+            asset1=tickers[0], asset2=tickers[1],
+            lookback=params.get("lookback", 252),
+            z_entry=params.get("z_entry", 1.5),
+            z_exit=params.get("z_exit", 0.5),
+            z_stop=params.get("z_stop", 3.5),
+        )
     elif alpha_name == "SMACrossover":
         return cls(symbol=tickers[0], fast=params.get("fast", 20), slow=params.get("slow", 50))
     elif alpha_name == "TSMomentum":
@@ -153,6 +168,8 @@ def main():
     if args.alpha in SINGLE_ASSET_ALPHAS:
         ticker = list(data.keys())[0]
         m = run_single_asset(alpha, data, ticker, args)
+    elif args.alpha in PAIRS_ALPHAS:
+        m = run_xs(alpha, data, args)   # run_research_xs handles long/short weights
     else:
         m = run_xs(alpha, data, args)
 

@@ -99,9 +99,11 @@ def run_research_xs(
         dict with equity_curve (pd.Series), returns (pd.Series), and
         per-symbol weight history (pd.DataFrame).
     """
-    # Align all symbols to a common index
+    # Align all symbols to a common index; forward-fill to handle late-start tickers
     close_dict = {sym: df["close"] for sym, df in multi_data.items()}
-    close_df = pd.DataFrame(close_dict).dropna(how="all")
+    close_df = pd.DataFrame(close_dict).ffill().dropna(how="all")
+    # Drop symbols that have no valid data at all
+    close_df = close_df.dropna(axis=1, how="all")
     symbols = list(close_df.columns)
     n = len(close_df)
     lookback = alpha.lookback
@@ -148,7 +150,7 @@ def run_research_xs(
 
     ts_vals, eq_vals = zip(*equity_history) if equity_history else ([], [])
     equity = pd.Series(list(eq_vals), index=list(ts_vals), name="equity")
-    returns = equity.pct_change().dropna()
+    returns = equity.pct_change(fill_method=None).dropna()
 
     weight_df = pd.DataFrame(weight_history).set_index("ts") if weight_history else pd.DataFrame()
 
