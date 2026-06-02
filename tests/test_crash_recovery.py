@@ -14,10 +14,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from mft.alphas.sma_crossover import SMACrossover
-from mft.backtest.event_harness import equity_to_returns, run_event_driven
+from mft.backtest.event_harness import run_event_driven
 from mft.execution.state import StateStore, TradingState
 
 

@@ -67,6 +67,8 @@ class LowVolAnomaly(AlphaBase):
             return {s: 0.0 for s in self.universe}
 
         closes = window[available]
+        if len(closes) < self._lookback + 1:
+            return {s: 0.0 for s in self.universe}
         if len(closes) < self.vol_window + 1:
             return {s: 0.0 for s in self.universe}
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from mft.alphas.long_short_momentum import LongShortMomentum
 from mft.alphas.low_vol_anomaly import LowVolAnomaly
@@ -18,7 +17,6 @@ from mft.alphas.short_reversion import ShortReversion
 from mft.alphas.ts_momentum import TSMomentum
 from mft.alphas.xs_momentum import XSMomentum
 from mft.data_layer.pit import make_pit_window
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -70,7 +68,6 @@ class TestTSMomentum:
 
     def test_long_in_uptrend(self):
         """Strong uptrend should produce a positive signal."""
-        rng = np.random.default_rng(0)
         prices = 100 * np.exp(np.cumsum(np.full(400, 0.002)))  # pure uptrend
         dates = pd.date_range("2015-01-01", periods=400, freq="B", tz="UTC")
         data = pd.DataFrame({
@@ -93,8 +90,8 @@ class TestTSMomentum:
         # Inject a large sentinel into the future — signal must not change
         data_poisoned = data.copy()
         data_poisoned.loc[data.index[301:], "close"] = 1e9
-        window_clean = make_pit_window(data, as_of, alpha.lookback)
-        sig_after = alpha.compute_signal(window_clean)
+        window_poisoned = make_pit_window(data_poisoned, as_of, alpha.lookback)
+        sig_after = alpha.compute_signal(window_poisoned)
 
         assert sig_before == sig_after
 
@@ -173,8 +170,8 @@ class TestShortReversion:
         sig_before = alpha.compute_signal(window)
         data_poisoned = data.copy()
         data_poisoned.loc[data.index[151:], "close"] = 1e9
-        window_clean = make_pit_window(data, as_of, alpha.lookback)
-        sig_after = alpha.compute_signal(window_clean)
+        window_poisoned = make_pit_window(data_poisoned, as_of, alpha.lookback)
+        sig_after = alpha.compute_signal(window_poisoned)
         assert sig_before == sig_after
 
 
@@ -200,7 +197,12 @@ def _make_pair_df(n=400, seed=99, spread_revert=True) -> pd.DataFrame:
 class TestPairsMeanReversion:
     def test_signal_is_dollar_neutral(self):
         """When a position is open the two weights must sum to zero."""
-        df = _make_pair_df()
+        n = 400
+        dates = pd.date_range("2015-01-01", periods=n, freq="B", tz="UTC")
+        base = 100 * np.exp(np.cumsum(np.full(n, 0.0003)))
+        ratio = np.ones(n)
+        ratio[-20:] = 0.90
+        df = pd.DataFrame({"A": base * ratio, "B": base}, index=dates)
         alpha = PairsMeanReversion("A", "B", z_entry=0.5)
         window = df.iloc[-alpha.lookback - 1:]
         sig = alpha.compute_signal(window)
@@ -228,6 +230,12 @@ class TestPairsMeanReversion:
         sig = alpha.compute_signal(df)
         assert sig == {"A": 0.0, "B": 0.0}
 
+    def test_flat_before_declared_lookback(self):
+        df = _make_pair_df(n=100)
+        alpha = PairsMeanReversion("A", "B", lookback=252)
+        sig = alpha.compute_signal(df)
+        assert sig == {"A": 0.0, "B": 0.0}
+
     def test_flat_when_missing_column(self):
         df = _make_pair_df()
         alpha = PairsMeanReversion("A", "MISSING")
@@ -249,14 +257,44 @@ class TestPairsMeanReversion:
         sig = alpha.compute_signal(window)
         assert sig == {"A": 0.0, "B": 0.0}, f"Hard stop should fire: {sig}"
 
+    def test_hold_band_returns_empty_signal(self):
+        """Between exit and entry thresholds, {} means hold current pair position."""
+        n = 400
+        dates = pd.date_range("2015-01-01", periods=n, freq="B", tz="UTC")
+        base = 100 * np.exp(np.cumsum(np.full(n, 0.0003)))
+        ratio = np.ones(n)
+        ratio[-5:] = 1.01
+        df = pd.DataFrame({"A": base * ratio, "B": base}, index=dates)
+
+        alpha = PairsMeanReversion("A", "B", lookback=252, z_entry=10.0, z_exit=0.01, z_stop=99.0)
+        window = df.iloc[-alpha.lookback - 1:]
+
+        assert alpha.compute_signal(window) == {}
+
     def test_no_look_ahead(self):
         df = _make_pair_df()
         alpha = PairsMeanReversion("A", "B")
-        window_t = df.iloc[-alpha.lookback - 1 : -1]   # excludes last row
-        window_t1 = df.iloc[-alpha.lookback - 1:]       # includes last row (future)
-        sig_t = alpha.compute_signal(window_t)
-        # Both windows are clean PIT slices — each should produce valid {0,±0.5} output
-        assert sig_t["A"] + sig_t["B"] == pytest.approx(0.0, abs=1e-9)
+        as_of_idx = len(df) - 2
+        window = df.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_clean = alpha.compute_signal(window)
+
+        poisoned = df.copy()
+        poisoned.iloc[as_of_idx + 1:] = 1e9
+        window_poisoned = poisoned.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_after = alpha.compute_signal(window_poisoned)
+
+        assert sig_clean == sig_after, "Signal changed when future bars were poisoned"
+
+    def test_uses_only_declared_lookback_window(self):
+        df = _make_pair_df(n=500)
+        alpha = PairsMeanReversion("A", "B", lookback=252)
+        sig_window = alpha.compute_signal(df.iloc[-alpha.lookback - 1:])
+
+        poisoned = df.copy()
+        poisoned.iloc[: -alpha.lookback - 1] = 1e9
+        sig_full = alpha.compute_signal(poisoned)
+
+        assert sig_full == sig_window
 
 
 # ── LowVolAnomaly ─────────────────────────────────────────────────────────────
@@ -305,6 +343,12 @@ class TestLowVolAnomaly:
     def test_flat_on_short_window(self):
         close_df = self._make_close_df(n=10)
         alpha = LowVolAnomaly(universe=self.SYMBOLS)
+        sig = alpha.compute_signal(close_df)
+        assert all(v == 0.0 for v in sig.values())
+
+    def test_flat_before_declared_lookback(self):
+        close_df = self._make_close_df(n=50)
+        alpha = LowVolAnomaly(universe=self.SYMBOLS, lookback=63, vol_window=20)
         sig = alpha.compute_signal(close_df)
         assert all(v == 0.0 for v in sig.values())
 
@@ -392,6 +436,20 @@ class TestXSMomentum:
         sig = alpha.compute_signal(window)
         assert sig["WINNER"] > 0  # WINNER selected; weight = 1/n_long
 
+    def test_uses_exact_lookback_denominator(self):
+        dates = pd.date_range("2020-01-01", periods=5, freq="B", tz="UTC")
+        close_df = pd.DataFrame(
+            {
+                "A": [100.0, 1.0, 1.0, 90.0, 90.0],
+                "B": [100.0, 100.0, 100.0, 150.0, 150.0],
+            },
+            index=dates,
+        )
+        alpha = XSMomentum(universe=["A", "B"], lookback=4, skip=1, top_frac=0.5)
+        sig = alpha.compute_signal(close_df)
+        assert sig["B"] > 0
+        assert sig["A"] == 0.0
+
 
 # ── LongShortMomentum ─────────────────────────────────────────────────────────
 
@@ -439,6 +497,28 @@ class TestLongShortMomentum:
         sig = alpha.compute_signal(window)
         assert sig["WINNER"] > 0, f"WINNER should be long: {sig}"
         assert sig["LOSER"]  < 0, f"LOSER should be short: {sig}"
+
+    def test_uses_exact_lookback_denominator(self):
+        dates = pd.date_range("2020-01-01", periods=5, freq="B", tz="UTC")
+        close_df = pd.DataFrame(
+            {
+                "A": [100.0, 1.0, 1.0, 90.0, 90.0],
+                "B": [100.0, 100.0, 100.0, 150.0, 150.0],
+                "C": [100.0, 100.0, 100.0, 50.0, 50.0],
+                "D": [100.0, 100.0, 100.0, 100.0, 100.0],
+            },
+            index=dates,
+        )
+        alpha = LongShortMomentum(
+            universe=["A", "B", "C", "D"],
+            lookback=4,
+            skip=1,
+            frac=0.25,
+        )
+        sig = alpha.compute_signal(close_df)
+        assert sig["B"] > 0
+        assert sig["C"] < 0
+        assert sig["A"] == 0.0
 
     def test_flat_on_short_window(self):
         close_df = self._make_close_df(n=50)

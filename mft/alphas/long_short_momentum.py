@@ -15,7 +15,6 @@ Dollar-neutral: total long exposure = total short exposure = 50% of equity.
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from mft.alphas.base import AlphaBase
@@ -67,8 +66,9 @@ class LongShortMomentum(AlphaBase):
         if len(closes) < self._lookback + 1:
             return {s: 0.0 for s in self.universe}
 
-        # (lookback - skip) month return: from bar[-lookback] to bar[-skip]
-        past_price = closes.iloc[-self._lookback]
+        # (lookback - skip) month return: from t-lookback to t-skip.
+        # Use shift so the denominator is exactly t-lookback, matching TSMomentum.
+        past_price = closes.shift(self._lookback).iloc[-1]
         lagged_price = closes.shift(self.skip).iloc[-1]
 
         ret = (lagged_price / past_price - 1).dropna()

@@ -18,7 +18,6 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -30,7 +29,7 @@ class TradingState:
     cash: float
     positions: dict[str, float] = field(default_factory=dict)
     last_signals: dict[str, float] = field(default_factory=dict)
-    last_bar_ts: Optional[pd.Timestamp] = None
+    last_bar_ts: pd.Timestamp | None = None
 
 
 class StateStore:

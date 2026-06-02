@@ -53,7 +53,7 @@ class SimState:
     last_signals: dict[str, float] = field(default_factory=dict)
     last_bar_ts: pd.Timestamp | None = None
 
-    def to_trading_state(self) -> "TradingState":
+    def to_trading_state(self) -> TradingState:
         """Snapshot current state for crash recovery."""
         from mft.execution.state import TradingState
         return TradingState(
@@ -72,8 +72,8 @@ def run_event_driven(
     init_cash: float = 100_000,
     commission_pct: float = 0.001,
     slippage_pct: float = 0.001,
-    initial_state: "TradingState | None" = None,
-    end_date: "pd.Timestamp | None" = None,
+    initial_state: TradingState | None = None,
+    end_date: pd.Timestamp | None = None,
 ) -> SimState:
     """
     Bar-by-bar event loop. Signals on bar close; orders fill on next bar open.
@@ -122,7 +122,6 @@ def run_event_driven(
         # --- Compute signal on current closed bar (PIT) ---
         window = data.iloc[i - lookback : i + 1]
         signals = alpha.compute_signal(window)
-        target_weight = signals.get(symbol, 0.0)
 
         # --- Mark equity at current close ---
         current_pos = state.positions.get(symbol, 0.0)
@@ -130,18 +129,29 @@ def run_event_driven(
         state.equity_curve.append((bar.name, equity))
 
         # --- Track state for crash recovery ---
-        state.last_signals[symbol] = target_weight
         state.last_bar_ts = bar.name
 
-        # --- Only rebalance when signal changes (matches vectorbt from_signals semantics) ---
+        # Empty signal means "hold current position" per AlphaBase.
+        if not signals:
+            continue
+
+        target_weight = signals.get(symbol, 0.0)
+        state.last_signals[symbol] = target_weight
+
+        # --- Only rebalance when the target weight changes ---
         if target_weight == prev_signal:
             continue
         prev_signal = target_weight
 
         # --- Execute on next bar open with slippage ---
-        direction = np.sign(target_weight - (1.0 if current_pos > 0 else 0.0))
-        exec_price = next_bar["open"] * (1 + slippage_pct * direction)
-        target_value = equity * target_weight
+        market_price = float(next_bar["open"])
+        exec_equity = state.cash + current_pos * market_price
+        target_value = exec_equity * target_weight
+        current_value = current_pos * market_price
+        delta_value = target_value - current_value
+
+        direction = np.sign(delta_value)
+        exec_price = market_price * (1 + slippage_pct * direction)
         current_value = current_pos * exec_price
         delta_value = target_value - current_value
 

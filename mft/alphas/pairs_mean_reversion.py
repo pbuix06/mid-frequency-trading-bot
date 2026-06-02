@@ -62,7 +62,10 @@ class PairsMeanReversion(AlphaBase):
     def compute_signal(self, window: pd.DataFrame) -> dict[str, float]:
         """
         window: DataFrame with columns [asset1, asset2] = close prices.
-        Returns: dollar-neutral weights {asset1: ±0.5, asset2: ∓0.5} or zeros.
+        Returns:
+            - dollar-neutral weights {asset1: ±0.5, asset2: ∓0.5} to enter/reverse
+            - explicit zeros to exit
+            - {} to hold the current pair position
         """
         flat = {self.asset1: 0.0, self.asset2: 0.0}
 
@@ -73,9 +76,10 @@ class PairsMeanReversion(AlphaBase):
         p2 = window[self.asset2].replace(0, np.nan).dropna()
         idx = p1.index.intersection(p2.index)
 
-        if len(idx) < 30:
+        if len(idx) < self._lookback + 1:
             return flat
 
+        idx = idx[-(self._lookback + 1):]
         log1 = np.log(p1.loc[idx].values)
         log2 = np.log(p2.loc[idx].values)
 
@@ -96,7 +100,8 @@ class PairsMeanReversion(AlphaBase):
         if abs(z) > self.z_stop:
             return flat
 
-        # Entry / hold
+        # Entry / exit / hold. The harness treats {} as "leave current
+        # positions unchanged", preserving the entry/exit band without alpha state.
         if z < -self.z_entry:
             # asset1 cheap vs asset2 → buy asset1, sell asset2
             return {self.asset1: 0.5, self.asset2: -0.5}
@@ -107,9 +112,7 @@ class PairsMeanReversion(AlphaBase):
             # Spread reverted — close position
             return flat
 
-        # Between exit and entry: hold (handled by harness tracking prev signal)
-        # Return flat; the harness only changes position when signal changes
-        return flat
+        return {}
 
     def __repr__(self) -> str:
         return (

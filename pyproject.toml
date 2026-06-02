@@ -45,6 +45,9 @@ dev = [
 nautilus = [
     "nautilus_trader>=1.190",
 ]
+ib = [
+    "ib-insync>=0.9.86",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["mft"]

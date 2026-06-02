@@ -19,7 +19,6 @@ from mft.alphas.sma_crossover import SMACrossover
 from mft.data_layer.pit import make_pit_window
 from mft.features import momentum
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _make_data(n: int = 200, seed: int = 42) -> pd.DataFrame:
@@ -191,7 +190,7 @@ def test_event_harness_produces_reasonable_equity(synthetic_ohlcv):
     Event harness must produce a non-trivial equity curve.
     Full vectorbt parity test requires vectorbt installed — see scripts/parity_check.py.
     """
-    from mft.backtest.event_harness import run_event_driven, equity_to_returns
+    from mft.backtest.event_harness import equity_to_returns, run_event_driven
 
     alpha = SMACrossover(symbol="SPY", fast=10, slow=30)
     state = run_event_driven(alpha, synthetic_ohlcv, symbol="SPY", init_cash=100_000)

@@ -4,10 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mft.validation.metrics import sharpe, sortino, max_drawdown, calmar, full_metrics
-from mft.validation.dsr import deflated_sharpe_ratio, min_backtest_length, expected_max_sharpe
 from mft.validation.cpcv import cpcv_splits, purge_embargo
-
+from mft.validation.dsr import deflated_sharpe_ratio, expected_max_sharpe, min_backtest_length
+from mft.validation.metrics import full_metrics, max_drawdown, sharpe, sortino
 
 # ── Metrics ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +43,6 @@ def test_sortino_geq_sharpe_for_positive_skew():
     gains = np.random.default_rng(1).exponential(0.005, 200)
     losses = np.random.default_rng(2).normal(-0.003, 0.001, 50)
     returns = pd.Series(np.concatenate([gains, losses]))
-    sr = sharpe(returns)
     so = sortino(returns)
     # Sortino penalizes only downside, so it can be higher or lower depending on skew
     assert np.isfinite(so)

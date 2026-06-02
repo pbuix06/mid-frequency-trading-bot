@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -25,8 +24,8 @@ class Order:
     symbol: str
     qty: float           # positive = buy, negative = sell
     order_type: str      # "market" | "limit"
-    limit_price: Optional[float] = None
-    client_id: Optional[str] = None
+    limit_price: float | None = None
+    client_id: str | None = None
 
 
 @dataclass

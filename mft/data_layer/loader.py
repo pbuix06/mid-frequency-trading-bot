@@ -16,14 +16,14 @@ and adjusted post-hoc. Use it only for learning the plumbing.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
 
 import pandas as pd
 
 _REQUIRED = {"open", "high", "low", "close", "volume"}
+_OHLCV = ["open", "high", "low", "close", "volume"]
 
 
-def load_parquet(path: Union[str, Path], symbol: str | None = None) -> pd.DataFrame:
+def load_parquet(path: str | Path, symbol: str | None = None) -> pd.DataFrame:
     """
     Load OHLCV from partitioned Parquet. Primary production path.
     Supports both single files and directory partitions (date=YYYY-MM-DD/...).
@@ -49,7 +49,7 @@ def load_parquet(path: Union[str, Path], symbol: str | None = None) -> pd.DataFr
     return df
 
 
-def load_csv(path: Union[str, Path]) -> pd.DataFrame:
+def load_csv(path: str | Path) -> pd.DataFrame:
     """Load OHLCV from CSV (Yahoo / broker export). Dev only."""
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     return _normalize(df)
@@ -86,4 +86,4 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
 
     # Return only OHLCV plus any extras (e.g. symbol, adjusted_close)
     extras = [c for c in df.columns if c not in _REQUIRED]
-    return df[sorted(_REQUIRED) + extras]
+    return df[_OHLCV + extras]

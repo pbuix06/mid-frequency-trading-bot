@@ -2,19 +2,19 @@
 Phase 3 Gate 3 check: pairwise alpha return correlations.
 Target: |ρ| < 0.3 for each cross-class pair (Playbook §3, GATE 3).
 
-Final Phase 3 alpha suite (4 sleeves selected for Phase 4 validation):
+Phase 3 candidate sleeve set, pre-lockbox only:
 
-  TSMOM_SPY        — directional equity trend, Sharpe 0.68
-  TSMOM_GLD        — directional gold/commodity trend, Sharpe 0.65, ρ≈0 with equities
-  TSMOM_TLT        — directional bond trend, Sharpe 0.06, ρ=-0.26 with equities (diversifier)
-  LongShortMomentum— dollar-neutral WML factor, Sharpe 0.20, ρ<0.17 with all
+  TSMOM_SPY        — directional equity trend
+  TSMOM_GLD        — directional gold/commodity trend
+  TSMOM_TLT        — directional bond trend / diversifier candidate
+  LongShortMomentum— dollar-neutral WML factor
 
 Notes:
-  - LowVolAnomaly (Sharpe 0.78) is implemented but ρ=0.81 with TSMOM_SPY (same market beta);
-    kept as research candidate, may replace TSMOM_SPY in Phase 5.
-  - TSMOM_TLT and TSMOM_IEF are highly correlated (ρ=0.80); only TLT in final suite.
+  - This is a correlation screen, not Phase 4 validation evidence.
+  - LowVolAnomaly is implemented but can be highly correlated with SPY trend due market beta.
+  - TSMOM_TLT is diversifying but weak on standalone return quality.
   - ShortReversion hit rate ~15% on daily data; edge exists but needs intraday resolution.
-  - PairsMeanReversion deferred: needs cointegration test (structural drift 2010-2026).
+  - PairsMeanReversion deferred: needs cointegration test and structural-break checks.
 """
 
 from __future__ import annotations
@@ -29,13 +29,13 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from mft.alphas import LongShortMomentum, TSMomentum
 from mft.backtest.event_harness import equity_to_returns, run_event_driven
 from mft.backtest.vectorbt_harness import run_research_xs
-from mft.data_layer.eodhd_ingest import load_ticker
+from mft.data_layer.eodhd_ingest import LOCKBOX_CUTOFF, load_ticker
 from mft.validation.metrics import full_metrics
 
 PIT_DIR = Path(__file__).parents[1] / "data" / "pit"
 EQUITY_UNIVERSE = [
-    "SPY", "QQQ", "IWM", "AAPL", "MSFT",
-    "GOOGL", "AMZN", "NVDA", "JPM", "XOM",
+    "SPY", "QQQ", "IWM", "MDY", "AAPL", "MSFT", "AMZN", "NVDA",
+    "JPM", "BAC", "GS", "WFC", "XOM", "CVX", "JNJ", "PFE", "WMT", "KO", "PG",
 ]
 
 
@@ -48,9 +48,13 @@ def _ts(ticker: str, kwargs: dict) -> pd.Series:
 
 def main() -> None:
     print("\nLoading data and computing returns...")
-    kwargs = {"slippage_pct": 0.001, "commission_pct": 0.001}
+    kwargs = {
+        "slippage_pct": 0.001,
+        "commission_pct": 0.001,
+        "end_date": LOCKBOX_CUTOFF,
+    }
 
-    # Final 4 sleeves
+    # Candidate sleeves for the Phase 3 correlation screen.
     r_spy = _ts("SPY", kwargs)
     r_gld = _ts("GLD", kwargs)
     r_tlt = _ts("TLT", kwargs)
@@ -58,7 +62,10 @@ def main() -> None:
     eq_data = {t: load_ticker(t, PIT_DIR) for t in EQUITY_UNIVERSE}
     ls_res = run_research_xs(
         LongShortMomentum(universe=EQUITY_UNIVERSE),
-        eq_data, commission_pct=0.001,
+        eq_data,
+        commission_pct=0.001,
+        slippage_pct=0.001,
+        end_date=LOCKBOX_CUTOFF,
     )
     r_ls = ls_res["returns"]
     r_ls.name = "LongShort_Eq"
@@ -68,7 +75,7 @@ def main() -> None:
     corr = returns_df.corr()
 
     print("\n" + "=" * 65)
-    print("  Phase 3 Final Suite — Pairwise Correlations")
+    print("  Phase 3 Candidate Sleeve Set — Pairwise Correlations")
     print("  Target: |ρ| < 0.3  (Playbook GATE 3)")
     print("=" * 65)
     print(corr.round(3).to_string())
@@ -90,12 +97,14 @@ def main() -> None:
     else:
         print("  GATE 3: NOT PASSED")
 
-    print("\n  Per-sleeve performance (2010–2026, 1× costs):")
+    print(f"\n  Per-sleeve performance (individual pre-lockbox windows through {LOCKBOX_CUTOFF.date()}, 1× costs):")
     for series in [r_spy, r_gld, r_tlt, r_ls]:
         m = full_metrics(series)
+        window = f"{series.index[0].date()}→{series.index[-1].date()}" if not series.empty else "empty"
         flag = "✓" if m["sharpe"] > 0.5 else ("~" if m["sharpe"] > 0.2 else "✗")
         print(
             f"  {flag} {series.name:<20}: "
+            f"{window:<23}  "
             f"Sharpe={m['sharpe']:>7.4f}  "
             f"CAGR={m['cagr']:>7.2%}  "
             f"MaxDD={m['max_drawdown']:>7.2%}"

@@ -68,17 +68,16 @@ class XSMomentum(AlphaBase):
         if len(closes) < self._lookback + 1:
             return {s: 0.0 for s in self.universe}
 
-        # (lookback - skip) month return, skip most recent month
-        past_price = closes.iloc[-(self._lookback)].values
-        lagged_price = closes.shift(self.skip).iloc[-1].values
-
-        # lagged_price: price at (today - skip bars)
-        # past_price: price at (today - lookback bars)
-        returns = (lagged_price - past_price) / (past_price + 1e-10)
-        ret_series = pd.Series(returns, index=available)
+        # (lookback - skip) month return, skip most recent month.
+        # Use shift so the denominator is exactly t-lookback, matching TSMomentum.
+        past_price = closes.shift(self._lookback).iloc[-1]
+        lagged_price = closes.shift(self.skip).iloc[-1]
+        ret_series = (lagged_price / past_price - 1).dropna()
+        if ret_series.empty:
+            return {s: 0.0 for s in self.universe}
 
         # Rank and select top quintile; equal weight summing to 1.0 (no leverage)
-        n_long = max(1, int(len(available) * self.top_frac))
+        n_long = max(1, int(len(ret_series) * self.top_frac))
         top_symbols = set(ret_series.nlargest(n_long).index)
         long_w = 1.0 / n_long
 

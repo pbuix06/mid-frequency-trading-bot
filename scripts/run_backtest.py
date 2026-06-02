@@ -2,7 +2,8 @@
 Phase 3 research backtest runner.
 
 Runs a single alpha on one or more tickers, prints the metric vector, and
-appends one row to trials/trials.csv. Every run is logged — no exceptions.
+appends one row to trials/trials.csv. Research runs are logged; --dry-run is
+diagnostic plumbing only and must not be treated as research evidence.
 
 Usage:
     # Single-asset alphas (TSMomentum, ShortReversion, SMACrossover):
@@ -12,7 +13,7 @@ Usage:
     # Cross-sectional alpha (XSMomentum) — pass a universe:
     python scripts/run_backtest.py --alpha XSMomentum --tickers SPY QQQ IWM DIA XLK XLF XLE
 
-    # Dry run (print metrics but do NOT log trial):
+    # Diagnostic dry run (print metrics but do NOT log trial/evidence):
     python scripts/run_backtest.py --alpha TSMomentum --tickers SPY --dry-run
 """
 
@@ -28,11 +29,18 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from mft.alphas import (
-    LowVolAnomaly, PairsMeanReversion, ShortReversion, SMACrossover, TSMomentum, XSMomentum,
+    LongShortMomentum,
+    LowVolAnomaly,
+    PairsMeanReversion,
+    ShortReversion,
+    SMACrossover,
+    TSMomentum,
+    XSMomentum,
 )
-from mft.backtest.vectorbt_harness import get_metrics, run_research, run_research_xs
+from mft.backtest.vectorbt_harness import run_research_xs
 from mft.data_layer.eodhd_ingest import LOCKBOX_CUTOFF, load_ticker
 from mft.monitoring.trial_log import TrialLog
+from mft.validation.dsr import min_backtest_length
 from mft.validation.metrics import full_metrics
 
 PIT_DIR = Path(__file__).parents[1] / "data" / "pit"
@@ -43,6 +51,7 @@ ALPHA_REGISTRY = {
     "TSMomentum": TSMomentum,
     "ShortReversion": ShortReversion,
     "XSMomentum": XSMomentum,
+    "LongShortMomentum": LongShortMomentum,
     "PairsMeanReversion": PairsMeanReversion,
     "LowVolAnomaly": LowVolAnomaly,
 }
@@ -68,7 +77,7 @@ def load_data(tickers: list[str]) -> dict[str, pd.DataFrame]:
 
 def build_alpha(alpha_name: str, tickers: list[str], params: dict):
     cls = ALPHA_REGISTRY[alpha_name]
-    if alpha_name in ("XSMomentum", "LowVolAnomaly"):
+    if alpha_name in ("XSMomentum", "LowVolAnomaly", "LongShortMomentum"):
         return cls(universe=tickers, **params)
     elif alpha_name == "PairsMeanReversion":
         if len(tickers) < 2:
@@ -103,6 +112,9 @@ def run_single_asset(alpha, data: dict, ticker: str, args) -> dict:
     from mft.backtest.event_harness import equity_to_returns, run_event_driven
 
     df = data[ticker]
+    research_df = df if args.end_date is None else df[df.index <= args.end_date]
+    if research_df.empty:
+        raise ValueError(f"{ticker} has no bars inside the selected research window")
     ev_state = run_event_driven(
         alpha, df, symbol=ticker,
         slippage_pct=args.slippage, commission_pct=args.commission,
@@ -110,8 +122,7 @@ def run_single_asset(alpha, data: dict, ticker: str, args) -> dict:
     )
     returns = equity_to_returns(ev_state)
     metrics = full_metrics(returns)
-    end = args.end_date if args.end_date is not None else df.index[-1]
-    data_window = f"{df.index[0].date()}:{pd.Timestamp(end).date()}"
+    data_window = f"{research_df.index[0].date()}:{research_df.index[-1].date()}"
     return {**metrics, "data_window": data_window, "n_fills": len(ev_state.fills)}
 
 
@@ -120,12 +131,16 @@ def run_xs(alpha, data: dict, args) -> dict:
         alpha, data,
         rebalance_freq=args.rebalance_freq,
         commission_pct=args.commission,
+        slippage_pct=args.slippage,
         end_date=args.end_date,
     )
     metrics = full_metrics(result["returns"])
-    start = min(df.index[0] for df in data.values())
-    end = args.end_date if args.end_date is not None else max(df.index[-1] for df in data.values())
-    data_window = f"{pd.Timestamp(start).date()}:{pd.Timestamp(end).date()}"
+    if len(result["returns"]):
+        data_window = f"{result['returns'].index[0].date()}:{result['returns'].index[-1].date()}"
+    else:
+        start = min(df.index[0] for df in data.values())
+        end = args.end_date if args.end_date is not None else max(df.index[-1] for df in data.values())
+        data_window = f"{pd.Timestamp(start).date()}:{pd.Timestamp(end).date()}"
     return {**metrics, "data_window": data_window, "n_fills": 0}
 
 
@@ -156,7 +171,11 @@ def main():
     p.add_argument("--slippage", type=float, default=0.001)
     p.add_argument("--commission", type=float, default=0.001)
     p.add_argument("--rebalance-freq", type=int, default=21, dest="rebalance_freq")
-    p.add_argument("--dry-run", action="store_true", help="Print metrics but skip trial log")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Diagnostic only: print metrics but skip trial log",
+    )
     p.add_argument("--include-lockbox", action="store_true",
                    help="DANGER: use data past LOCKBOX_CUTOFF. Only for the Phase 4 final exam.")
     args = p.parse_args()
@@ -192,6 +211,7 @@ def main():
 
     if args.dry_run:
         print("  [dry-run] Trial NOT logged.")
+        print("            Diagnostic only; do not treat these metrics as research evidence.")
         return
 
     # Log trial
@@ -206,8 +226,13 @@ def main():
         notes=f"Phase 3 research — {args.alpha}",
     )
     n_trials = log.count()
+    min_bars = min_backtest_length(n_trials)
+    min_years = min_bars / 252
     print(f"  Trial {trial_id} logged to trials/trials.csv")
-    print(f"  MinBTL budget: {n_trials} trials used (max ~45 on 5yr data)\n")
+    print(
+        f"  MinBTL: {n_trials} trials used; "
+        f"need at least {min_bars} bars ({min_years:.2f} years) of data\n"
+    )
 
 
 if __name__ == "__main__":

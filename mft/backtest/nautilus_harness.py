@@ -19,12 +19,10 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
 
 import pandas as pd
 
 from mft.alphas.base import AlphaBase
-
 
 # ── Data conversion helpers ───────────────────────────────────────────────────
 
@@ -89,11 +87,11 @@ def _make_strategy(alpha: AlphaBase, symbol: str, venue_str: str, bar_type_str: 
     Defined inside a function to avoid polluting the module namespace with
     NautilusTrader imports at import time (heavy C-extension load).
     """
+    from nautilus_trader.model.data import BarType
     from nautilus_trader.model.enums import OrderSide, TimeInForce
+    from nautilus_trader.model.events import OrderFilled
     from nautilus_trader.model.identifiers import InstrumentId, Venue
     from nautilus_trader.model.objects import Quantity
-    from nautilus_trader.model.data import BarType
-    from nautilus_trader.model.events import OrderFilled
     from nautilus_trader.trading.strategy import Strategy, StrategyConfig
 
     class _Config(StrategyConfig, frozen=True):
@@ -226,7 +224,11 @@ def run_nautilus(
     from nautilus_trader.model.currencies import USD
     from nautilus_trader.model.data import BarSpecification, BarType
     from nautilus_trader.model.enums import (
-        AccountType, AggregationSource, BarAggregation, OmsType, PriceType,
+        AccountType,
+        AggregationSource,
+        BarAggregation,
+        OmsType,
+        PriceType,
     )
     from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
     from nautilus_trader.model.instruments import Equity

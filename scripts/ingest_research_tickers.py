@@ -7,7 +7,7 @@ Uses RESEARCH_FROM = 2000-01-01 so the full modern regime history is captured:
   2007-2009  financial crisis
   2010-2019  long low-vol bull
   2020       COVID crash
-  2021-2022  rate-hike bear (inside lock-box)
+  2021-2022  rate-hike bear through the lock-box cutoff
 
 Always force-overwrites existing files so start dates are correct.
 Multi-asset ETFs are requested from 2000 too; EODHD returns from their
@@ -25,7 +25,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from rich.console import Console
-from rich.table import Table
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from mft.data_layer.eodhd_ingest import (

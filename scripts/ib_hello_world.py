@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from ib_insync import IB, Stock, MarketOrder, util
+from ib_insync import IB, MarketOrder, Stock, util
 
 HOST = "127.0.0.1"
 PORT = 7497       # 7497 = paper, 7496 = live (never touch live yet)

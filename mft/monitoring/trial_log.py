@@ -28,7 +28,6 @@ import json
 import subprocess
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 TRIAL_LOG_PATH = Path(__file__).parents[2] / "trials" / "trials.csv"
 
@@ -103,9 +102,9 @@ class TrialLog:
         params: dict,
         data_window: str,
         is_sharpe: float,
-        oos_sharpe: Optional[float] = None,
-        max_dd: Optional[float] = None,
-        turnover: Optional[float] = None,
+        oos_sharpe: float | None = None,
+        max_dd: float | None = None,
+        turnover: float | None = None,
         notes: str = "",
     ) -> str:
         """Append one row and return the trial_id."""

@@ -8,8 +8,7 @@ compound until catastrophic. Don't be one of them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -37,7 +36,7 @@ class RiskState:
     weekly_start_equity: float = 0.0
     is_halted: bool = False
     halt_reason: str = ""
-    halt_timestamp: Optional[pd.Timestamp] = None
+    halt_timestamp: pd.Timestamp | None = None
 
 
 class RiskManager:
@@ -94,7 +93,7 @@ class RiskManager:
     def update_post_trade(
         self,
         current_equity: float,
-        timestamp: Optional[pd.Timestamp] = None,
+        timestamp: pd.Timestamp | None = None,
     ) -> list[str]:
         """
         Check loss limits after each bar. Trigger kill switch if breached.
@@ -133,7 +132,7 @@ class RiskManager:
         self.state.halt_reason = ""
         self.state.halt_timestamp = None
 
-    def _halt(self, reason: str, timestamp: Optional[pd.Timestamp]) -> None:
+    def _halt(self, reason: str, timestamp: pd.Timestamp | None) -> None:
         if not self.state.is_halted:
             self.state.is_halted = True
             self.state.halt_reason = reason

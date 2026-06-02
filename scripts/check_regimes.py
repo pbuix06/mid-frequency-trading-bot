@@ -1,7 +1,7 @@
 """
 Phase 3 regime-consistency check (analysis, NOT search — no trial rows logged).
 
-Runs each final-suite alpha once over the full research window (2000 → lockbox),
+Runs each candidate sleeve once over the full research window (2000 → lockbox),
 then slices the daily return series into 4 market regimes and reports per-regime
 Sharpe. Positions stay continuous across boundaries (realistic), unlike
 re-running the backtest per period.
@@ -31,7 +31,7 @@ from mft.alphas import LongShortMomentum, TSMomentum
 from mft.backtest.event_harness import equity_to_returns, run_event_driven
 from mft.backtest.vectorbt_harness import run_research_xs
 from mft.data_layer.eodhd_ingest import LOCKBOX_CUTOFF, load_ticker
-from mft.validation.metrics import sharpe, max_drawdown
+from mft.validation.metrics import max_drawdown, sharpe
 
 PIT_DIR = Path(__file__).parents[1] / "data" / "pit"
 
@@ -83,7 +83,7 @@ def main() -> None:
     eq_data = {t: load_ticker(t, PIT_DIR) for t in EQUITY_UNIVERSE}
     ls = run_research_xs(
         LongShortMomentum(universe=EQUITY_UNIVERSE), eq_data,
-        commission_pct=0.001, end_date=LB,
+        commission_pct=0.001, slippage_pct=0.001, end_date=LB,
     )
     r_ls = ls["returns"]
     print(f"  LongShortMomentum  [full-period Sharpe = {sharpe(r_ls):.3f}]")

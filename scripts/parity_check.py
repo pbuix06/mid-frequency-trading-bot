@@ -28,7 +28,8 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from mft.alphas.sma_crossover import SMACrossover
-from mft.backtest.event_harness import run_event_driven, equity_to_returns
+from mft.backtest.event_harness import equity_to_returns, run_event_driven
+from mft.data_layer.eodhd_ingest import LOCKBOX_CUTOFF
 from mft.monitoring.trial_log import TrialLog
 from mft.validation.metrics import full_metrics
 
@@ -54,7 +55,7 @@ def run_parity(data: pd.DataFrame, symbol: str, fast: int = 20, slow: int = 50) 
     alpha = SMACrossover(symbol=symbol, fast=fast, slow=slow)
 
     print(f"\n{'=' * 60}")
-    print(f"SMA Crossover Parity Check")
+    print("SMA Crossover Parity Check")
     print(f"  symbol={symbol}  fast={fast}  slow={slow}")
     print(f"  data: {len(data)} bars  {data.index[0].date()} → {data.index[-1].date()}")
     print(f"{'=' * 60}\n")
@@ -72,12 +73,12 @@ def run_parity(data: pd.DataFrame, symbol: str, fast: int = 20, slow: int = 50) 
 
     # ── vectorbt harness ─────────────────────────────────────────────────────
     try:
-        from mft.backtest.vectorbt_harness import run_research, get_metrics as get_vbt_metrics
+        from mft.backtest.vectorbt_harness import get_metrics as get_vbt_metrics
+        from mft.backtest.vectorbt_harness import run_research
 
         print("\nRunning vectorbt research harness...")
         pf = run_research(alpha, data, symbol=symbol)
         vbt_m = get_vbt_metrics(pf)
-        vbt_stats = pf.stats()
         print(f"  Trades: {vbt_m['n_trades']}")
         print(f"  Final equity: {pf.value().iloc[-1]:,.2f}")
         print(f"  Sharpe: {vbt_m['sharpe']:.3f}")
@@ -130,6 +131,11 @@ def main() -> None:
     parser.add_argument("--fast", type=int, default=20)
     parser.add_argument("--slow", type=int, default=50)
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic data")
+    parser.add_argument(
+        "--include-lockbox",
+        action="store_true",
+        help="DANGER: use data past LOCKBOX_CUTOFF. Only for the Phase 4 final exam.",
+    )
     args = parser.parse_args()
 
     if args.synthetic or args.data is None:
@@ -138,6 +144,11 @@ def main() -> None:
     else:
         from mft.data_layer.loader import load_parquet
         data = load_parquet(args.data, symbol=args.symbol)
+        if args.include_lockbox:
+            print("\n  ⚠  --include-lockbox set: USING LOCK-BOX DATA. Final exam only.\n")
+        else:
+            data = data[data.index <= LOCKBOX_CUTOFF]
+            print(f"\n  Lock-box enforced: data truncated at {LOCKBOX_CUTOFF.date()}\n")
 
     run_parity(data, symbol=args.symbol, fast=args.fast, slow=args.slow)
 

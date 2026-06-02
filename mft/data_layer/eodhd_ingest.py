@@ -16,8 +16,6 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-import pandas as pd
-
 BASE_URL = "https://eodhistoricaldata.com/api"
 DEFAULT_FROM    = "2010-01-01"   # broad universe ingest (full ~41k ticker download)
 RESEARCH_FROM   = "2000-01-01"   # Phase 3+ research instruments — full regime coverage
@@ -25,7 +23,7 @@ MIN_BARS        = 30
 
 # Lock-box: the final 15% of the dataset.
 # Hardcoded 2022-07-01. NEVER computed dynamically — once set, immutable.
-# Everything from this date forward is the final OOS exam; do not touch.
+# Research runs may include bars through this cutoff; anything after it is the final exam.
 LOCKBOX_CUTOFF = pd.Timestamp("2022-07-01", tz="UTC")
 
 _HEADERS = {

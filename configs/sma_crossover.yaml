@@ -26,6 +26,6 @@ risk:
 
 data:
   source: parquet           # parquet | csv
-  path: data/pit/SPY/
+  path: data/pit/SPY.parquet
   start: "2010-01-01"
-  end: "2022-12-31"         # Lock-box: 2023-01-01 onward is untouched
+  end: "2022-07-01"         # Lock-box: after 2022-07-01 is untouched
