@@ -309,15 +309,19 @@ class TestLowVolAnomaly:
         assert all(v == 0.0 for v in sig.values())
 
     def test_no_look_ahead(self):
+        """Poisoning bars AFTER the window must not change the signal."""
         close_df = self._make_close_df()
         alpha = LowVolAnomaly(universe=self.SYMBOLS)
-        window_t = close_df.iloc[-alpha.lookback - 2: -1]
-        window_t1 = close_df.iloc[-alpha.lookback - 1:]
-        sig_t = alpha.compute_signal(window_t)
-        sig_t1 = alpha.compute_signal(window_t1)
-        # Both are valid slices, each returns {0,1} values
-        assert all(v in (0.0, 1.0) for v in sig_t.values())
-        assert all(v in (0.0, 1.0) for v in sig_t1.values())
+        as_of_idx = 150
+        window = close_df.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_clean = alpha.compute_signal(window)
+
+        poisoned = close_df.copy()
+        poisoned.iloc[as_of_idx + 1:] = 1e9
+        window_from_poisoned = poisoned.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_after = alpha.compute_signal(window_from_poisoned)
+
+        assert sig_clean == sig_after, "Signal changed when future bars were poisoned"
 
 
 # ── XSMomentum ────────────────────────────────────────────────────────────────
@@ -353,18 +357,20 @@ class TestXSMomentum:
         assert all(v == 0.0 for v in sig.values())
 
     def test_no_look_ahead(self):
+        """Poisoning bars AFTER the window must not change the signal."""
         close_df = self._make_close_df()
         alpha = XSMomentum(universe=self.SYMBOLS)
-        window_clean = close_df.iloc[-alpha.lookback - 1:]
-        sig_before = alpha.compute_signal(window_clean)
+        as_of_idx = 320
+        window = close_df.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_clean = alpha.compute_signal(window)
 
+        # Inject a huge sentinel into every future bar, recompute on same window
         poisoned = close_df.copy()
-        poisoned.iloc[-1] = 1e9  # poison last row (future bar not in window)
-        window_before_last = close_df.iloc[-alpha.lookback - 2: -1]
-        sig_after = alpha.compute_signal(window_before_last)
-        # Both windows are clean slices — just verify they each produce valid output
-        assert all(v in (0.0, 1.0) for v in sig_before.values())
-        assert all(v in (0.0, 1.0) for v in sig_after.values())
+        poisoned.iloc[as_of_idx + 1:] = 1e9
+        window_from_poisoned = poisoned.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_after = alpha.compute_signal(window_from_poisoned)
+
+        assert sig_clean == sig_after, "Signal changed when future bars were poisoned"
 
     def test_best_performer_goes_long(self):
         """The symbol with the highest return over (lookback-skip) should be selected."""
@@ -449,12 +455,16 @@ class TestLongShortMomentum:
         assert all(v == 0.0 for v in sig.values())
 
     def test_no_look_ahead(self):
+        """Poisoning bars AFTER the window must not change the signal."""
         close_df = self._make_close_df()
         alpha = LongShortMomentum(universe=self.SYMBOLS)
-        w_t  = close_df.iloc[-alpha.lookback - 2 : -1]
-        w_t1 = close_df.iloc[-alpha.lookback - 1:]
-        sig_t  = alpha.compute_signal(w_t)
-        sig_t1 = alpha.compute_signal(w_t1)
-        # Each is a valid clean slice — both should be dollar-neutral
-        assert abs(sum(sig_t.values()))  < 1e-9
-        assert abs(sum(sig_t1.values())) < 1e-9
+        as_of_idx = 320
+        window = close_df.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_clean = alpha.compute_signal(window)
+
+        poisoned = close_df.copy()
+        poisoned.iloc[as_of_idx + 1:] = 1e9
+        window_from_poisoned = poisoned.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_after = alpha.compute_signal(window_from_poisoned)
+
+        assert sig_clean == sig_after, "Signal changed when future bars were poisoned"

@@ -31,7 +31,7 @@ from mft.alphas import (
     LowVolAnomaly, PairsMeanReversion, ShortReversion, SMACrossover, TSMomentum, XSMomentum,
 )
 from mft.backtest.vectorbt_harness import get_metrics, run_research, run_research_xs
-from mft.data_layer.eodhd_ingest import load_ticker
+from mft.data_layer.eodhd_ingest import LOCKBOX_CUTOFF, load_ticker
 from mft.monitoring.trial_log import TrialLog
 from mft.validation.metrics import full_metrics
 
@@ -106,10 +106,12 @@ def run_single_asset(alpha, data: dict, ticker: str, args) -> dict:
     ev_state = run_event_driven(
         alpha, df, symbol=ticker,
         slippage_pct=args.slippage, commission_pct=args.commission,
+        end_date=args.end_date,
     )
     returns = equity_to_returns(ev_state)
     metrics = full_metrics(returns)
-    data_window = f"{df.index[0].date()}:{df.index[-1].date()}"
+    end = args.end_date if args.end_date is not None else df.index[-1]
+    data_window = f"{df.index[0].date()}:{pd.Timestamp(end).date()}"
     return {**metrics, "data_window": data_window, "n_fills": len(ev_state.fills)}
 
 
@@ -118,10 +120,12 @@ def run_xs(alpha, data: dict, args) -> dict:
         alpha, data,
         rebalance_freq=args.rebalance_freq,
         commission_pct=args.commission,
+        end_date=args.end_date,
     )
     metrics = full_metrics(result["returns"])
-    dates = sorted({df.index[0] for df in data.values()} | {df.index[-1] for df in data.values()})
-    data_window = f"{min(df.index[0] for df in data.values()).date()}:{max(df.index[-1] for df in data.values()).date()}"
+    start = min(df.index[0] for df in data.values())
+    end = args.end_date if args.end_date is not None else max(df.index[-1] for df in data.values())
+    data_window = f"{pd.Timestamp(start).date()}:{pd.Timestamp(end).date()}"
     return {**metrics, "data_window": data_window, "n_fills": 0}
 
 
@@ -153,7 +157,18 @@ def main():
     p.add_argument("--commission", type=float, default=0.001)
     p.add_argument("--rebalance-freq", type=int, default=21, dest="rebalance_freq")
     p.add_argument("--dry-run", action="store_true", help="Print metrics but skip trial log")
+    p.add_argument("--include-lockbox", action="store_true",
+                   help="DANGER: use data past LOCKBOX_CUTOFF. Only for the Phase 4 final exam.")
     args = p.parse_args()
+
+    # Lock-box enforced by default. Every research run stops at LOCKBOX_CUTOFF
+    # unless --include-lockbox is explicitly passed (the final exam, once).
+    args.end_date = None if args.include_lockbox else LOCKBOX_CUTOFF
+    if args.include_lockbox:
+        print("\n  ⚠  --include-lockbox set: USING LOCK-BOX DATA. This is the final exam.")
+        print("     Do NOT use this for ordinary research.\n")
+    else:
+        print(f"\n  Lock-box enforced: data truncated at {LOCKBOX_CUTOFF.date()}")
 
     params = json.loads(args.params)
     print(f"\nLoading data for: {args.tickers}")
