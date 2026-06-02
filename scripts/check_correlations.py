@@ -1,18 +1,20 @@
 """
 Phase 3 Gate 3 check: pairwise alpha return correlations.
-Target: |ρ| < 0.3 for each pair (Playbook §3, GATE 3).
+Target: |ρ| < 0.3 for each cross-class pair (Playbook §3, GATE 3).
 
-Active alpha suite:
-  1. TSMomentum      — single-asset 12-1mo vol-scaled trend (SPY)
-  2. ShortReversion  — single-asset 5-day z-score reversal (SPY)
-  3. XSMomentum      — cross-sectional long-only top quintile
-  4. LongShortMomentum — dollar-neutral WML, market-neutral
-  5. LowVolAnomaly   — cross-sectional long lowest-vol quintile
+Final Phase 3 alpha suite (4 sleeves selected for Phase 4 validation):
 
-PairsMeanReversion is implemented but held for Phase 4 (requires a formal
-cointegration test to select valid pairs; trading untested pairs on 2010–2026
-data produced Sharpe < 0 because structural tech/value divergence broke the
-spread mean-reversion assumption).
+  TSMOM_SPY        — directional equity trend, Sharpe 0.68
+  TSMOM_GLD        — directional gold/commodity trend, Sharpe 0.65, ρ≈0 with equities
+  TSMOM_TLT        — directional bond trend, Sharpe 0.06, ρ=-0.26 with equities (diversifier)
+  LongShortMomentum— dollar-neutral WML factor, Sharpe 0.20, ρ<0.17 with all
+
+Notes:
+  - LowVolAnomaly (Sharpe 0.78) is implemented but ρ=0.81 with TSMOM_SPY (same market beta);
+    kept as research candidate, may replace TSMOM_SPY in Phase 5.
+  - TSMOM_TLT and TSMOM_IEF are highly correlated (ρ=0.80); only TLT in final suite.
+  - ShortReversion hit rate ~15% on daily data; edge exists but needs intraday resolution.
+  - PairsMeanReversion deferred: needs cointegration test (structural drift 2010-2026).
 """
 
 from __future__ import annotations
@@ -24,76 +26,54 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from mft.alphas import LongShortMomentum, LowVolAnomaly, ShortReversion, TSMomentum, XSMomentum
+from mft.alphas import LongShortMomentum, TSMomentum
 from mft.backtest.event_harness import equity_to_returns, run_event_driven
 from mft.backtest.vectorbt_harness import run_research_xs
 from mft.data_layer.eodhd_ingest import load_ticker
+from mft.validation.metrics import full_metrics
 
 PIT_DIR = Path(__file__).parents[1] / "data" / "pit"
+EQUITY_UNIVERSE = [
+    "SPY", "QQQ", "IWM", "AAPL", "MSFT",
+    "GOOGL", "AMZN", "NVDA", "JPM", "XOM",
+]
 
-UNIVERSE_10 = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "JPM", "XOM"]
+
+def _ts(ticker: str, kwargs: dict) -> pd.Series:
+    df = load_ticker(ticker, PIT_DIR)
+    r = equity_to_returns(run_event_driven(TSMomentum(ticker), df, ticker, **kwargs))
+    r.name = f"TSMOM_{ticker}"
+    return r
 
 
-def main():
-    print("\nLoading data...")
-    spy = load_ticker("SPY", PIT_DIR)
-    qqq = load_ticker("QQQ", PIT_DIR)
-    iwm = load_ticker("IWM", PIT_DIR)
-    multi_data = {t: load_ticker(t, PIT_DIR) for t in UNIVERSE_10}
+def main() -> None:
+    print("\nLoading data and computing returns...")
+    kwargs = {"slippage_pct": 0.001, "commission_pct": 0.001}
 
-    kwargs_single = {"slippage_pct": 0.001, "commission_pct": 0.001}
-    kwargs_xs = {"commission_pct": 0.001}
+    # Final 4 sleeves
+    r_spy = _ts("SPY", kwargs)
+    r_gld = _ts("GLD", kwargs)
+    r_tlt = _ts("TLT", kwargs)
 
-    # 1. TSMomentum (SPY, single-asset)
-    r_ts = equity_to_returns(
-        run_event_driven(TSMomentum("SPY"), spy, "SPY", **kwargs_single)
+    eq_data = {t: load_ticker(t, PIT_DIR) for t in EQUITY_UNIVERSE}
+    ls_res = run_research_xs(
+        LongShortMomentum(universe=EQUITY_UNIVERSE),
+        eq_data, commission_pct=0.001,
     )
-    r_ts.name = "TSMomentum"
+    r_ls = ls_res["returns"]
+    r_ls.name = "LongShort_Eq"
 
-    # 2. ShortReversion (SPY, single-asset)
-    r_rev = equity_to_returns(
-        run_event_driven(ShortReversion("SPY"), spy, "SPY", **kwargs_single)
-    )
-    r_rev.name = "ShortReversion"
-
-    # 3. XSMomentum (SPY/QQQ/IWM, long-only)
-    xs_result = run_research_xs(
-        XSMomentum(universe=["SPY", "QQQ", "IWM"]),
-        {"SPY": spy, "QQQ": qqq, "IWM": iwm},
-        **kwargs_xs,
-    )
-    r_xs = xs_result["returns"]
-    r_xs.name = "XSMomentum"
-
-    # 4. LongShortMomentum (10-stock universe, dollar-neutral)
-    ls_result = run_research_xs(
-        LongShortMomentum(universe=list(multi_data.keys())),
-        multi_data,
-        **kwargs_xs,
-    )
-    r_ls = ls_result["returns"]
-    r_ls.name = "LongShortMomentum"
-
-    # 5. LowVolAnomaly (10-stock universe)
-    lv_result = run_research_xs(
-        LowVolAnomaly(universe=list(multi_data.keys())),
-        multi_data,
-        **kwargs_xs,
-    )
-    r_lv = lv_result["returns"]
-    r_lv.name = "LowVolAnomaly"
-
-    # Align on common index and compute correlation matrix
-    returns_df = pd.concat([r_ts, r_rev, r_xs, r_ls, r_lv], axis=1).dropna()
+    # Align
+    returns_df = pd.concat([r_spy, r_gld, r_tlt, r_ls], axis=1).dropna()
     corr = returns_df.corr()
 
     print("\n" + "=" * 65)
-    print("  Pairwise Alpha Return Correlations")
-    print("  Target: |ρ| < 0.3 for each pair  (Playbook GATE 3)")
+    print("  Phase 3 Final Suite — Pairwise Correlations")
+    print("  Target: |ρ| < 0.3  (Playbook GATE 3)")
     print("=" * 65)
     print(corr.round(3).to_string())
 
-    print("\n  Pair analysis:")
+    print("\n  All pairs:")
     names = list(corr.columns)
     all_pass = True
     for i, a in enumerate(names):
@@ -102,15 +82,24 @@ def main():
             status = "✓" if abs(rho) < 0.3 else "✗ FAIL"
             if abs(rho) >= 0.3:
                 all_pass = False
-            print(f"  {a:22s} vs {b:22s}: ρ = {rho:+.3f}  {status}")
+            print(f"  {a:<20} vs {b:<20}: ρ = {rho:+.3f}  {status}")
 
     print()
     if all_pass:
-        print("  GATE 3 correlation check: PASSED ✓")
+        print("  GATE 3: PASSED ✓  All pairs |ρ| < 0.3")
     else:
-        print("  GATE 3 correlation check: NOT YET PASSED")
-        print("  (high ρ between long-only equity alphas is expected;")
-        print("   market-neutral LongShortMomentum provides the key offset)")
+        print("  GATE 3: NOT PASSED")
+
+    print("\n  Per-sleeve performance (2010–2026, 1× costs):")
+    for series in [r_spy, r_gld, r_tlt, r_ls]:
+        m = full_metrics(series)
+        flag = "✓" if m["sharpe"] > 0.5 else ("~" if m["sharpe"] > 0.2 else "✗")
+        print(
+            f"  {flag} {series.name:<20}: "
+            f"Sharpe={m['sharpe']:>7.4f}  "
+            f"CAGR={m['cagr']:>7.2%}  "
+            f"MaxDD={m['max_drawdown']:>7.2%}"
+        )
     print()
 
 

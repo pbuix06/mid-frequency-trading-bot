@@ -101,6 +101,56 @@ def fetch_ohlcv(
     return df
 
 
+def fetch_ohlcv_symbol(
+    eodhd_symbol: str,
+    api_key: str,
+    from_date: str = DEFAULT_FROM,
+    to_date: str | None = None,
+) -> pd.DataFrame:
+    """
+    Fetch adjusted daily OHLCV using the full EODHD symbol (no .US appended).
+
+    Use for:
+      - US ETFs:      fetch_ohlcv_symbol("TLT.US",  key)
+      - FX pairs:     fetch_ohlcv_symbol("EURUSD.FOREX", key)
+      - Crypto:       fetch_ohlcv_symbol("BTC-USD.CC",   key)
+
+    Applies the same adjusted_close ratio as fetch_ohlcv().
+    """
+    url = f"{BASE_URL}/eod/{eodhd_symbol}"
+    params: dict = {"api_token": api_key, "from": from_date, "fmt": "json", "period": "d"}
+    if to_date:
+        params["to"] = to_date
+
+    resp = _get(url, params)
+    if resp is None:
+        return pd.DataFrame()
+
+    data = resp.json()
+    if not isinstance(data, list) or not data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data)
+    required = {"date", "open", "high", "low", "close", "volume"}
+    if not required.issubset(df.columns):
+        return pd.DataFrame()
+
+    df["timestamp"] = pd.to_datetime(df["date"], utc=True)
+    df = df.set_index("timestamp").sort_index()
+
+    if "adjusted_close" in df.columns:
+        ratio = df["adjusted_close"] / df["close"].replace(0, float("nan"))
+        for col in ("open", "high", "low"):
+            df[col] = (df[col] * ratio).round(6)
+        df["close"] = df["adjusted_close"].round(6)
+        df = df.drop(columns=["adjusted_close"])
+
+    df["volume"] = df["volume"].fillna(0).astype(float)
+    df = df[["open", "high", "low", "close", "volume"]]
+    df = df[df["close"] > 0]
+    return df
+
+
 def save_ticker(df: pd.DataFrame, ticker: str, pit_dir: Path) -> None:
     """Write OHLCV DataFrame to data/pit/{ticker}.parquet (snappy compressed)."""
     pit_dir.mkdir(parents=True, exist_ok=True)
