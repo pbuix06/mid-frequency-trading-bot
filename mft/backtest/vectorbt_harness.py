@@ -74,3 +74,87 @@ def get_metrics(portfolio: "vbt.Portfolio") -> dict:
         "calmar": float(stats.get("Calmar Ratio", np.nan)),
         "n_trades": int(stats.get("Total Trades", 0)),
     }
+
+
+def run_research_xs(
+    alpha: AlphaBase,
+    multi_data: dict[str, pd.DataFrame],
+    *,
+    rebalance_freq: int = 21,
+    init_cash: float = 100_000,
+    commission_pct: float = 0.001,
+) -> dict:
+    """
+    Cross-sectional research harness for multi-asset alphas (e.g. XSMomentum).
+
+    Args:
+        alpha:          AlphaBase with compute_signal(window) where window has
+                        columns = symbol names, rows = close prices.
+        multi_data:     dict mapping symbol → OHLCV DataFrame (same date range).
+        rebalance_freq: Recompute signals every N bars (default 21 ≈ monthly).
+        init_cash:      Starting portfolio value.
+        commission_pct: One-way commission rate.
+
+    Returns:
+        dict with equity_curve (pd.Series), returns (pd.Series), and
+        per-symbol weight history (pd.DataFrame).
+    """
+    # Align all symbols to a common index
+    close_dict = {sym: df["close"] for sym, df in multi_data.items()}
+    close_df = pd.DataFrame(close_dict).dropna(how="all")
+    symbols = list(close_df.columns)
+    n = len(close_df)
+    lookback = alpha.lookback
+
+    # Track portfolio state
+    cash = float(init_cash)
+    positions: dict[str, float] = {s: 0.0 for s in symbols}
+    equity_history: list[tuple[pd.Timestamp, float]] = []
+    weight_history: list[dict] = []
+
+    prev_weights: dict[str, float] = {s: 0.0 for s in symbols}
+
+    for i in range(lookback, n):
+        ts = close_df.index[i]
+        prices = close_df.iloc[i]
+
+        # Current equity
+        portfolio_value = cash + sum(positions[s] * prices[s] for s in symbols if s in prices)
+        equity_history.append((ts, portfolio_value))
+
+        # Rebalance on schedule
+        if (i - lookback) % rebalance_freq != 0:
+            continue
+
+        window = close_df.iloc[i - lookback: i + 1]
+        new_weights = alpha.compute_signal(window)
+        weight_history.append({"ts": ts, **new_weights})
+
+        # Execute rebalance: adjust each symbol toward target weight
+        for sym in symbols:
+            target_w = new_weights.get(sym, 0.0)
+            target_val = portfolio_value * target_w
+            current_val = positions[sym] * prices.get(sym, 0.0)
+            delta = target_val - current_val
+
+            if abs(delta) < 1.0:
+                continue
+
+            commission = abs(delta) * commission_pct
+            cash -= delta + commission
+            positions[sym] = target_val / prices[sym] if prices[sym] > 0 else 0.0
+
+        prev_weights = new_weights
+
+    ts_vals, eq_vals = zip(*equity_history) if equity_history else ([], [])
+    equity = pd.Series(list(eq_vals), index=list(ts_vals), name="equity")
+    returns = equity.pct_change().dropna()
+
+    weight_df = pd.DataFrame(weight_history).set_index("ts") if weight_history else pd.DataFrame()
+
+    return {
+        "equity": equity,
+        "returns": returns,
+        "weights": weight_df,
+        "final_equity": equity.iloc[-1] if len(equity) else init_cash,
+    }

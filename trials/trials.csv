@@ -3,3 +3,6 @@ T0001,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01
 T0002,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5421,,-0.1744,,2,Gate 0 parity check,no-git
 T0003,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2015-01-01:2016-11-30,-0.5421,,-0.1744,,3,Gate 0 parity check,no-git
 T0004,2026-06-02,SMACrossover,"[""SPY""]","{""fast"": 20, ""slow"": 50}",2010-01-04:2026-05-29,0.6134,,-0.2926,,4,Gate 0 parity check,81ca75c
+T0005,2026-06-02,TSMomentum,"[""SPY""]","{""default"": true}",2010-01-04:2026-05-29,0.6829,,-0.2206,,5,Phase 3 research — TSMomentum,9b71042
+T0006,2026-06-02,ShortReversion,"[""SPY""]","{""default"": true}",2010-01-04:2026-05-29,-0.7108,,-0.7106,,6,Phase 3 research — ShortReversion,9b71042
+T0007,2026-06-02,XSMomentum,"[""SPY"", ""QQQ"", ""IWM""]","{""default"": true}",2010-01-04:2026-05-29,0.7343,,-0.3430,,7,Phase 3 research — XSMomentum,9b71042
