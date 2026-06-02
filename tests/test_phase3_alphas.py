@@ -14,6 +14,7 @@ from mft.alphas.long_short_momentum import LongShortMomentum
 from mft.alphas.low_vol_anomaly import LowVolAnomaly
 from mft.alphas.pairs_mean_reversion import PairsMeanReversion
 from mft.alphas.short_reversion import ShortReversion
+from mft.alphas.short_term_reversal import ShortTermReversal
 from mft.alphas.ts_momentum import TSMomentum
 from mft.alphas.xs_momentum import XSMomentum
 from mft.data_layer.pit import make_pit_window
@@ -548,3 +549,64 @@ class TestLongShortMomentum:
         sig_after = alpha.compute_signal(window_from_poisoned)
 
         assert sig_clean == sig_after, "Signal changed when future bars were poisoned"
+
+
+# ── ShortTermReversal ─────────────────────────────────────────────────────────
+
+class TestShortTermReversal:
+    SYMBOLS = ["A", "B", "C", "D", "E", "F"]
+
+    def _make_close_df(self, n=200) -> pd.DataFrame:
+        multi = _make_universe(self.SYMBOLS, n=n)
+        return pd.DataFrame({s: multi[s]["close"] for s in self.SYMBOLS})
+
+    def test_dollar_neutral(self):
+        close_df = self._make_close_df()
+        alpha = ShortTermReversal(universe=self.SYMBOLS)
+        window = close_df.iloc[-alpha.lookback - 1:]
+        sig = alpha.compute_signal(window)
+        assert abs(sum(sig.values())) < 1e-9, f"not dollar-neutral: {sig}"
+
+    def test_longs_the_loser_shorts_the_winner(self):
+        """Contrarian: the recent biggest loser goes long, biggest winner short."""
+        n = 120
+        dates = pd.date_range("2015-01-01", periods=n, freq="B", tz="UTC")
+        flat = np.full(n, 100.0)
+        close_df = pd.DataFrame({
+            "WIN": flat.copy(), "LOSE": flat.copy(),
+            "M1": flat.copy(), "M2": flat.copy(),
+            "M3": flat.copy(), "M4": flat.copy(),
+        }, index=dates)
+        # Over the formation window (last ~6 bars, excluding the most recent 1):
+        # WIN rallied, LOSE dropped. Set the window t-7..t-1.
+        close_df.loc[dates[-7:], "WIN"] = [100, 104, 108, 112, 116, 120, 120]
+        close_df.loc[dates[-7:], "LOSE"] = [100, 96, 92, 88, 84, 80, 80]
+        alpha = ShortTermReversal(universe=list(close_df.columns), window=5, skip=1, frac=0.20)
+        window = close_df.iloc[-alpha.lookback - 1:]
+        sig = alpha.compute_signal(window)
+        assert sig["LOSE"] > 0, f"recent loser should be long: {sig}"
+        assert sig["WIN"] < 0, f"recent winner should be short: {sig}"
+
+    def test_flat_on_short_window(self):
+        close_df = self._make_close_df(n=4)
+        alpha = ShortTermReversal(universe=self.SYMBOLS)
+        sig = alpha.compute_signal(close_df)
+        assert all(v == 0.0 for v in sig.values())
+
+    def test_flat_on_small_universe(self):
+        close_df = self._make_close_df()[["A", "B"]]
+        alpha = ShortTermReversal(universe=["A", "B"])
+        sig = alpha.compute_signal(close_df.iloc[-alpha.lookback - 1:])
+        assert all(v == 0.0 for v in sig.values())
+
+    def test_no_look_ahead(self):
+        """Poisoning bars AFTER the window must not change the signal."""
+        close_df = self._make_close_df()
+        alpha = ShortTermReversal(universe=self.SYMBOLS)
+        as_of_idx = 150
+        win = close_df.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        sig_clean = alpha.compute_signal(win)
+        poisoned = close_df.copy()
+        poisoned.iloc[as_of_idx + 1:] = 1e9
+        win_p = poisoned.iloc[as_of_idx - alpha.lookback: as_of_idx + 1]
+        assert alpha.compute_signal(win_p) == sig_clean
