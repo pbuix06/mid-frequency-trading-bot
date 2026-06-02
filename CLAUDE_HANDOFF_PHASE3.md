@@ -1,5 +1,55 @@
 # Claude Handoff: Phase 0-3 Fixes And Research Quality
 
+## Phase 3.5 Update (Claude, post-Codex) — Research Quality work done
+
+Acted on the Codex recommendations before Phase 4. All pre-lockbox, every run logged.
+
+**Correctness**
+- `remove_outliers()` was full-sample (look-ahead). Rewrote it causal: trailing
+  rolling z-score, shifted by 1 so a bar never enters its own stats. Tests in
+  `tests/test_data_layer.py` prove a late spike cannot change earlier bars.
+
+**New diagnostics** (`mft/validation/diagnostics.py`, Gate-4 prereqs):
+  `cost_stress_curve` (1x/2x/3x), `turnover_from_weights`, `rolling_sharpe`.
+
+**LowVolAnomaly — REJECTED.** Regressed its returns on SPY buy-and-hold over
+  2000-2022: beta 0.65, R² 0.66, annualized alpha −0.26%, beta-hedged Sharpe
+  −0.03. It is disguised defensive-equity beta, not a low-vol premium. Dropped
+  from the candidate suite.
+
+**Survivorship-free cross-sectional study** (the big one). Built
+  `mft/backtest/survivorship_harness.py`: PIT as-of universe membership +
+  delisting liquidation, weight-based multiplicative-equity engine (a first
+  share-accounting build blew up shorting low-priced delisting names). The liquid
+  candidate pool (≥$20M ADV, data by 2010) is 1,929 names — **35% (673) delisted
+  before 2022**, exactly the bias the 19-name screen hid.
+  - **LongShortMomentum: Sharpe 0.11 (19 survivors) → 0.31 (avg 619 names,
+    survivorship-free, 2010-2022). Survives 2x and 3x cost stress.** Breadth +
+    de-biasing more than doubled it — Grinold's law in action. Now a legitimate
+    market-neutral diversifier candidate (raw MaxDD −56%, needs vol-targeting).
+  - **XSMomentum long-only: non-viable** on a broad universe (−97% MaxDD; long-only
+    small-cap momentum is destroyed in crashes). Use the dollar-neutral form.
+
+**Revised Phase 3 candidate suite for Phase 4:**
+| Sleeve | Sharpe | Universe | Note |
+|---|---:|---|---|
+| TSMomentum(SPY) | 0.55 | single | equity trend |
+| TSMomentum(GLD) | 0.51 | single | commodity trend |
+| TSMomentum(TLT) | 0.19 | single | bond diversifier (weak standalone) |
+| LongShortMomentum | 0.31 | ~619-name survivorship-free | market-neutral, cost-robust ✓ |
+| ~~LowVolAnomaly~~ | rejected | — | disguised 0.65 market beta |
+| ~~XSMomentum long-only~~ | non-viable | — | −97% DD; dollar-neutral form only |
+
+**Open item for Phase 4:** LongShort is measured on the weight-based survivorship
+harness; the TSMOM sleeves on the event harness. Before combining, decide one
+canonical engine for portfolio-level validation. The survivorship harness is
+research tooling — Nautilus parity still pending for multi-asset/fractional.
+
+---
+
+(original Codex handoff below)
+
+
 Context for Claude:
 
 - User has NOT started Phase 4.

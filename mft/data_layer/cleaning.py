@@ -48,22 +48,36 @@ def remove_outliers(
     df: pd.DataFrame,
     z_threshold: float = 5.0,
     fill: str = "ffill",
+    window: int = 63,
 ) -> pd.DataFrame:
     """
-    Detect and neutralize price outliers using z-score on log returns.
+    Detect and neutralize price outliers using a CAUSAL z-score on log returns.
+
+    PIT-safe: each bar's z-score is computed from a TRAILING window of prior
+    returns only (shifted by 1 so the current bar never enters its own
+    statistics). Full-sample mean/std would leak future information into early
+    bars — never use that in PIT research.
 
     Args:
         df: OHLCV DataFrame.
         z_threshold: Z-score above which a bar is considered an outlier.
         fill: How to handle outlier rows — "ffill" (forward-fill) or "drop".
+        window: Trailing window (bars) for the rolling mean/std. Default 63 (~3mo).
 
     Returns:
         Cleaned DataFrame. Outlier OHLCV values replaced by NaN then filled.
     """
     df = df.copy()
     log_ret = np.log(df["close"] / df["close"].shift(1))
-    mu, sigma = log_ret.mean(), log_ret.std()
-    outlier_mask = (np.abs(log_ret - mu) / (sigma + 1e-10)) > z_threshold
+
+    # Trailing stats excluding the current bar (shift(1)). Min one quarter of
+    # the window before the test activates, so the warmup period is never flagged.
+    roll = log_ret.shift(1).rolling(window, min_periods=max(20, window // 4))
+    mu = roll.mean()
+    sigma = roll.std()
+
+    z = (log_ret - mu).abs() / (sigma + 1e-10)
+    outlier_mask = (z > z_threshold).fillna(False)
 
     for col in ("open", "high", "low", "close"):
         df.loc[outlier_mask, col] = np.nan

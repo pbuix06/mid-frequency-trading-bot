@@ -1,4 +1,10 @@
 from .cpcv import cpcv_splits, purge_embargo
+from .diagnostics import (
+    cost_stress_curve,
+    rolling_sharpe,
+    rolling_sharpe_summary,
+    turnover_from_weights,
+)
 from .dsr import deflated_sharpe_ratio, expected_max_sharpe, min_backtest_length
 from .metrics import calmar, full_metrics, max_drawdown, sharpe, sortino
 
@@ -13,4 +19,8 @@ __all__ = [
     "expected_max_sharpe",
     "cpcv_splits",
     "purge_embargo",
+    "cost_stress_curve",
+    "rolling_sharpe",
+    "rolling_sharpe_summary",
+    "turnover_from_weights",
 ]
