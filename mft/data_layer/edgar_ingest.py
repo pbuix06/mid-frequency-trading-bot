@@ -84,68 +84,94 @@ def fetch_companyfacts(cik: int) -> dict | None:
     return resp.json() if resp is not None else None
 
 
-def extract_pit_series(
-    facts: dict,
-    tag: str,
-    namespace: str = "us-gaap",
-    unit: str | None = None,
-) -> pd.Series:
-    """
-    PIT series for one XBRL tag, indexed by the `filed` (knowable) date.
-
-    For each reporting period (`end` date) we keep the EARLIEST filing — the value
-    as first reported, which is what you would have known then (later restatements
-    arrive with later `filed` dates and are intentionally ignored here). The
-    result is a step series: value(t) = most recently reported figure knowable by
-    date t. Forward-fill it onto a price index to align to trading days.
-
-    Returns an empty Series if the tag/unit is absent.
-    """
+def _collect_rows(facts: dict, tag: str, namespace: str, unit: str | None, flow: bool) -> pd.DataFrame:
+    """Raw [end, filed, val] rows for one tag (annual-only if flow). Empty if absent."""
     node = facts.get("facts", {}).get(namespace, {}).get(tag)
     if not node:
-        return pd.Series(dtype=float, name=tag)
+        return pd.DataFrame()
     units = node.get("units", {})
     if not units:
-        return pd.Series(dtype=float, name=tag)
-    unit = unit or next(iter(units))
-    rows = units.get(unit, [])
+        return pd.DataFrame()
+    u = unit or next(iter(units))
+    rows = units.get(u, [])
     if not rows:
-        return pd.Series(dtype=float, name=tag)
-
+        return pd.DataFrame()
     df = pd.DataFrame(rows)
     if "filed" not in df or "end" not in df or "val" not in df:
-        return pd.Series(dtype=float, name=tag)
+        return pd.DataFrame()
     df["filed"] = pd.to_datetime(df["filed"], utc=True)
     df["end"] = pd.to_datetime(df["end"], utc=True)
+    if flow:
+        if "start" not in df:
+            return pd.DataFrame()
+        df["start"] = pd.to_datetime(df["start"], utc=True)
+        days = (df["end"] - df["start"]).dt.days
+        df = df[(days >= 300) & (days <= 400)]  # annual periods only
+    return df[["end", "filed", "val"]] if not df.empty else pd.DataFrame()
 
-    # Earliest filing per period-end (original report, not restatements)
+
+def extract_pit_series(
+    facts: dict,
+    tag: str | list[str],
+    namespace: str = "us-gaap",
+    unit: str | None = None,
+    flow: bool = False,
+) -> pd.Series:
+    """
+    PIT series indexed by the `filed` (knowable) date.
+
+    `tag` may be a single XBRL tag or a LIST of candidate tags. Candidates are
+    COMBINED at the row level — companies switch tags across eras (e.g. revenue:
+    old `Revenues`/`SalesRevenueNet` -> post-2018
+    `RevenueFromContractWithCustomerExcludingAssessedTax`), so combining recovers
+    the full history. For each reporting period (`end`) we keep the EARLIEST
+    filing (original report, not later restatements). The result is a step series:
+    value(t) = most recently reported figure knowable by date t. Forward-fill onto
+    a price index to align to trading days.
+
+    flow=True for income-statement items (revenue, COGS, net income): keep only
+    ANNUAL periods (~300-400 days) so a 3-month and a 12-month figure sharing an
+    `end` are never conflated.
+    """
+    tags = [tag] if isinstance(tag, str) else list(tag)
+    parts = [r for r in (_collect_rows(facts, t, namespace, unit, flow) for t in tags) if not r.empty]
+    if not parts:
+        return pd.Series(dtype=float, name=tags[0])
+    df = pd.concat(parts, ignore_index=True)
+
+    # Earliest filing per period-end across all candidate tags
     df = df.sort_values("filed").groupby("end", as_index=False).first()
 
-    # Step series keyed by knowable date; on a tie keep the latest period-end
     df = df.sort_values(["filed", "end"])
-    s = pd.Series(df["val"].to_numpy(dtype=float), index=df["filed"].to_numpy(), name=tag)
+    s = pd.Series(df["val"].to_numpy(dtype=float), index=df["filed"].to_numpy(), name=tags[0])
     s.index = pd.DatetimeIndex(s.index, name="filed")
     s = s[~s.index.duplicated(keep="last")].sort_index()
     return s
 
 
-# Tags we use for value/quality factors (us-gaap unless noted).
-FUNDAMENTAL_TAGS = {
-    "book_equity": ("StockholdersEquity", "us-gaap", "USD"),
-    "assets": ("Assets", "us-gaap", "USD"),
-    "net_income": ("NetIncomeLoss", "us-gaap", "USD"),
-    "shares": ("EntityCommonStockSharesOutstanding", "dei", "shares"),
+# Items -> (candidate tags tried in order, namespace, unit, is_flow).
+# Companies use different XBRL tags for the same concept, so we fall back.
+FUNDAMENTAL_ITEMS = {
+    "book_equity": (["StockholdersEquity"], "us-gaap", "USD", False),
+    "assets":      (["Assets"], "us-gaap", "USD", False),
+    "net_income":  (["NetIncomeLoss"], "us-gaap", "USD", True),
+    "shares":      (["EntityCommonStockSharesOutstanding"], "dei", "shares", False),
+    "revenue":     (["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
+                     "SalesRevenueNet"], "us-gaap", "USD", True),
+    "cogs":        (["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
+                    "us-gaap", "USD", True),
 }
 
 
 def extract_fundamentals(facts: dict) -> pd.DataFrame:
     """
-    Build a tidy long DataFrame of the FUNDAMENTAL_TAGS for one company:
-    columns [filed, item, value]. Each row is knowable as of `filed`.
+    Build a tidy long DataFrame of the FUNDAMENTAL_ITEMS for one company:
+    columns [filed, item, value]. Each row is knowable as of `filed`. For each
+    item the candidate tags are tried in order until one yields data.
     """
     frames = []
-    for item, (tag, ns, unit) in FUNDAMENTAL_TAGS.items():
-        s = extract_pit_series(facts, tag, namespace=ns, unit=unit)
+    for item, (tags, ns, unit, flow) in FUNDAMENTAL_ITEMS.items():
+        s = extract_pit_series(facts, tags, namespace=ns, unit=unit, flow=flow)
         if not s.empty:
             frames.append(pd.DataFrame({"filed": s.index, "item": item, "value": s.to_numpy()}))
     if not frames:
