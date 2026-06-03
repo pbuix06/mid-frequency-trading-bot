@@ -63,3 +63,39 @@ def build_bm_panel(
     if not out:
         return pd.DataFrame(index=close_df.index)
     return pd.DataFrame(out, index=close_df.index)
+
+
+def build_gross_profitability_panel(
+    close_df: pd.DataFrame,
+    edgar_dir: Path,
+    tickers: list[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Novy-Marx gross profitability panel (high = quality = long).
+
+    GP/A[t, ticker] = (revenue_knowable(t) − COGS_knowable(t)) / assets_knowable(t)
+
+    Uses annual revenue/COGS (PIT, forward-filled by SEC filed date) and total
+    assets. Novy-Marx (2013): gross profit / assets predicts the cross-section
+    of returns as well as book-to-market and is roughly UNCORRELATED with value,
+    so it adds genuine breadth. Price is not used (a pure fundamental ratio), so
+    no market-cap dependency. NaN where inputs are unknown or assets <= 0.
+    """
+    cols = tickers if tickers is not None else list(close_df.columns)
+    out = {}
+    for t in cols:
+        if t not in close_df.columns:
+            continue
+        try:
+            fund = load_fundamentals(t, edgar_dir)
+        except FileNotFoundError:
+            continue
+        rev = _pit_item_series(fund, "revenue", close_df.index)
+        cogs = _pit_item_series(fund, "cogs", close_df.index)
+        assets = _pit_item_series(fund, "assets", close_df.index)
+        gpa = (rev - cogs) / assets
+        gpa = gpa.where(assets > 0)
+        out[t] = gpa
+    if not out:
+        return pd.DataFrame(index=close_df.index)
+    return pd.DataFrame(out, index=close_df.index)
