@@ -1,4 +1,5 @@
 from .base import AlphaBase
+from .cross_sectional_factor import CrossSectionalFactor
 from .long_short_momentum import LongShortMomentum
 from .low_vol_anomaly import LowVolAnomaly
 from .pairs_mean_reversion import PairsMeanReversion
@@ -18,4 +19,5 @@ __all__ = [
     "PairsMeanReversion",
     "LowVolAnomaly",
     "LongShortMomentum",
+    "CrossSectionalFactor",
 ]
