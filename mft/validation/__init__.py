@@ -6,7 +6,15 @@ from .diagnostics import (
     turnover_from_weights,
 )
 from .dsr import deflated_sharpe_ratio, expected_max_sharpe, min_backtest_length
-from .metrics import calmar, full_metrics, max_drawdown, sharpe, sortino
+from .metrics import (
+    calmar,
+    conditional_var,
+    full_metrics,
+    max_drawdown,
+    sharpe,
+    sortino,
+    value_at_risk,
+)
 
 __all__ = [
     "full_metrics",
@@ -23,4 +31,6 @@ __all__ = [
     "rolling_sharpe",
     "rolling_sharpe_summary",
     "turnover_from_weights",
+    "value_at_risk",
+    "conditional_var",
 ]

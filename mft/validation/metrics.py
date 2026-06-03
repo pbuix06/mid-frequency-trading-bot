@@ -83,6 +83,28 @@ def profit_factor(returns: pd.Series) -> float:
     return float(gains / losses)
 
 
+def value_at_risk(returns: pd.Series, alpha: float = 0.05) -> float:
+    """
+    Historical Value-at-Risk: the alpha-quantile daily loss (a negative number).
+    VaR(5%) = -0.03 means "on the worst 5% of days, you lose at least 3%".
+    """
+    if returns.empty:
+        return float("nan")
+    return float(np.quantile(returns, alpha))
+
+
+def conditional_var(returns: pd.Series, alpha: float = 0.05) -> float:
+    """
+    Conditional VaR / Expected Shortfall: the MEAN loss on days worse than the
+    VaR threshold (a negative number). Captures tail severity that VaR misses.
+    """
+    if returns.empty:
+        return float("nan")
+    var = np.quantile(returns, alpha)
+    tail = returns[returns <= var]
+    return float(tail.mean()) if len(tail) else float(var)
+
+
 def full_metrics(
     returns: pd.Series,
     rf: float = 0.0,
