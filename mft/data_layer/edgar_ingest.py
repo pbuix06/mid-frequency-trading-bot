@@ -76,6 +76,55 @@ def load_cik_map(cache_path: Path | None = None) -> dict[str, int]:
     return mapping
 
 
+CIK_LOOKUP_URL = "https://www.sec.gov/Archives/edgar/cik-lookup-data.txt"
+
+# Common corporate suffixes / noise stripped during name normalization. Kept
+# minimal so distinct entities ("X INC" vs "X FINANCE CORP") don't collapse.
+_NAME_NOISE = {".", ",", "/", "\\", "'", "&"}
+
+
+def normalize_company_name(name: str) -> str:
+    """Uppercase, strip punctuation noise, collapse whitespace — for exact match."""
+    s = name.upper()
+    for ch in _NAME_NOISE:
+        s = s.replace(ch, " ")
+    return " ".join(s.split())
+
+
+def load_name_cik_map(cache_path: Path | None = None) -> dict[str, list[int]]:
+    """
+    Normalized company-NAME -> [CIKs] from SEC's cik-lookup-data.txt (~1M
+    entries, INCLUDING delisted/historical filers). This is how we reach dead
+    companies the current ticker map omits. A name can map to several CIKs
+    (subsidiaries, refilings); the caller resolves which has XBRL facts.
+    Raw file cached to disk; parsed fresh (a few seconds).
+    """
+    if cache_path and cache_path.exists():
+        text = cache_path.read_text()
+    else:
+        resp = _get(CIK_LOOKUP_URL)
+        if resp is None:
+            raise RuntimeError("Could not download SEC cik-lookup-data.txt")
+        text = resp.text
+        if cache_path:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(text)
+
+    out: dict[str, list[int]] = {}
+    for line in text.splitlines():
+        # format: "COMPANY NAME:0000000000:"
+        line = line.rstrip(":")
+        if ":" not in line:
+            continue
+        name, _, cik = line.rpartition(":")
+        if not cik.isdigit():
+            continue
+        key = normalize_company_name(name)
+        if key:
+            out.setdefault(key, []).append(int(cik))
+    return out
+
+
 # ── Fundamentals ──────────────────────────────────────────────────────────────
 
 def fetch_companyfacts(cik: int) -> dict | None:
