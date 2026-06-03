@@ -103,6 +103,11 @@ class SimulatedAdapter(ExecutionAdapter):
     def get_cash(self) -> float:
         return self._cash
 
+    def set_state(self, cash: float, positions: dict[str, float]) -> None:
+        """Restore broker state after a crash/restart (paper-sim source of truth)."""
+        self._cash = float(cash)
+        self._positions = {s: float(q) for s, q in positions.items()}
+
     def process_bar(self, bar: pd.Series, symbol: str) -> list[Fill]:
         """Fill pending orders for this symbol at bar open with slippage."""
         fills = []
