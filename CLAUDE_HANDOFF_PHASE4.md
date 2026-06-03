@@ -66,3 +66,32 @@ non-momentum families.
 - Do not mine more momentum variants (raises N, worsens the bar).
 - Do not deploy real capital. Paper-trading for plumbing validation (Phase 6,
   zero capital) is acceptable ONLY if explicitly not treated as edge validation.
+
+---
+
+## Update: EDGAR survivorship "fix" backfired — selection bias (REJECTED)
+
+Attempted to de-bias the value/quality universe by matching delisted tickers to
+historical SEC CIKs (cik-lookup-data.txt) and ingesting their fundamentals
+(385 recovered). Result looked great — value 0.29->0.77, portfolio DSR
+0.35->0.82 — and was REJECTED as a selection-bias artifact:
+
+  - 67% of recovered delisted names ended within 30% of their 1-yr peak
+    (median last/peak 0.94) => the matchable delistings are overwhelmingly
+    orderly ACQUISITIONS (which end high and target cheap/value names), not
+    bankruptcies. The name-match recovers acquisitions (clean filings/names) but
+    misses the offsetting bankruptcies (messy/none) -> value spuriously inflated.
+  - Two tells: (1) adding failed firms RAISED value (wrong direction for
+    survivorship); (2) 2010-2022 was a value-winter, so 0.77 is implausible.
+
+Lesson: free EDGAR gives clean PIT fundamentals for SURVIVORS but cannot produce
+a clean survivorship-free cross-section. That needs paid survivorship-free
+fundamentals (CRSP/Compustat). Do NOT trust the de-biased fundamental numbers.
+
+Trustworthy state stands: value ~0.29, quality ~0.16 (survivor-only, mildly
+biased but right ballpark); both real + uncorrelated with momentum; portfolio
+DSR ~0.35. Still below Gate 4. The artifact (DSR 0.82) is NOT counted.
+
+Next lever: genuinely new DIMENSIONS that don't depend on a clean equity
+delisting universe — FX (no survivorship issue; EODHD FX data is free/on-plan)
+and intraday (MT5/Alpaca/paid). Pursue cross-asset breadth.
