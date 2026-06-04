@@ -37,6 +37,11 @@ DATA_URL = "https://data.alpaca.markets/v2/stocks/{symbol}/bars"
 _DEFAULT_FEED = "iex"          # free tier
 _PAGE_LIMIT = 10_000
 
+# Intraday lock-box (separate from the daily one). Alpaca minute history is
+# ~2016+, so research is 2016-01 -> 2023-07 and 2023-07 -> present is the
+# untouched final exam. Hardcoded, immutable.
+INTRADAY_LOCKBOX = pd.Timestamp("2023-07-01", tz="UTC")
+
 
 def _headers() -> dict:
     kid = os.getenv("ALPACA_API_KEY_ID", "")
