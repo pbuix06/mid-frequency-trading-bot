@@ -44,13 +44,20 @@ def gap_fade_returns(
 def opening_range_break_returns(
     feat: pd.DataFrame,
     cost_per_trade: float = BASE_COST_PER_TRADE,
+    entry_slippage_bps: float = 0.0,
 ) -> pd.Series:
     """
     Trade the first opening-range breakout in its direction; enter at the
     breakout level (or_high / or_low), hold to close. Intraday momentum.
+
+    `entry_slippage_bps` worsens the entry AGAINST the trade (you don't fill
+    exactly at the level — a stop runs as price moves). 0 = the optimistic
+    fill-at-level the research used. This knob exposes how execution-sensitive the
+    edge is: the gap to a realistic taker fill is the whole question (spec §8).
     """
     pos = feat["brk_dir"].astype(float)
-    entry = feat["brk_entry"]
+    slip = entry_slippage_bps * 1e-4
+    entry = feat["brk_entry"] * (1.0 + pos * slip)   # adverse: pay up to go long, etc.
     hold = np.where(pos != 0, feat["close"] / entry - 1.0, 0.0)
     ret = pos * pd.Series(hold, index=feat.index) - 2.0 * cost_per_trade * (pos != 0)
     return ret.dropna().rename("or_break")

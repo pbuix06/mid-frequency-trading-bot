@@ -1,6 +1,12 @@
-# Data — never commit raw or PIT data
+# Data — never commit raw, PIT, or vendor minute data
 data/raw/
 data/pit/
+data/crypto/
+data/intraday/
+
+# Generated research artifacts — regenerable, never commit (parquet/png/csv/md outputs)
+reports/
+results/
 
 # Python
 __pycache__/
@@ -36,8 +42,13 @@ Thumbs.db
 # Logs
 *.log
 
-# Project docs
-CLAUDE.md
+# Private local instructions / assistant artifacts (never commit)
+CLAUDE*.md
+*.handoff.md
+.assistant/
+.ai/
+.cursor/
+.Rhistory
 
 # Keep gitkeeps
 !data/raw/.gitkeep

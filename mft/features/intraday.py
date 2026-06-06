@@ -67,3 +67,39 @@ def daily_session_features(minute_df: pd.DataFrame, or_minutes: int = 30) -> pd.
     feat["overnight_gap"] = feat["open"] / feat["prev_close"] - 1.0
     feat["intraday_ret"] = feat["close"] / feat["open"] - 1.0
     return feat
+
+
+def realized_intraday_vol(feat: pd.DataFrame, asof: pd.Timestamp, window: int = 63) -> float:
+    """
+    Realized intraday volatility from the `window` sessions STRICTLY BEFORE `asof`.
+
+    Ex-ante by construction: a session dated `asof` or later can never enter the
+    estimate, so this is safe to use for universe selection on the live path.
+    Returns NaN until `window` prior sessions exist.
+    """
+    hist = feat.loc[feat.index < asof, "intraday_ret"].dropna()
+    if len(hist) < window:
+        return float("nan")
+    return float(hist.iloc[-window:].std())
+
+
+def select_high_vol_universe(
+    feats: dict[str, pd.DataFrame],
+    asof: pd.Timestamp,
+    top: int,
+    window: int = 63,
+) -> list[str]:
+    """
+    Ex-ante universe rule (spec §3): rank symbols by realized intraday vol over the
+    `window` sessions before `asof` and return the top `top`. Uses only past data,
+    so the selection is knowable before the trading session it governs.
+
+    This is the PRODUCTION universe rule. The research script's full-sample ranking
+    is a frozen-free-data convenience; the live/validation path uses this.
+    """
+    vols = {s: realized_intraday_vol(f, asof, window) for s, f in feats.items()}
+    ranked = sorted(
+        (s for s, v in vols.items() if pd.notna(v)),
+        key=lambda s: -vols[s],
+    )
+    return ranked[:top]

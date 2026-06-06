@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from mft.backtest.intraday_session import gap_fade_returns, opening_range_break_returns

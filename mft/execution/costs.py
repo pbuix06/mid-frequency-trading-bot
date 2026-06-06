@@ -1,7 +1,7 @@
 """
 Transaction-cost assumptions — single source of truth.
 
-Costs are NOT equal across instruments (see CLAUDE.md / handoff). Two layers:
+Costs are NOT equal across instruments (see docs/RESEARCH_PROCESS.md). Two layers:
 
   - Flat default (DEFAULT_COMMISSION_PCT / DEFAULT_SLIPPAGE_PCT): one canonical
     per-leg rate every engine defaults to. Conservative for ultra-liquid ETFs
