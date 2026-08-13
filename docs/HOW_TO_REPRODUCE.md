@@ -24,7 +24,7 @@ Notes:
   Some networks/regions geo-block `api.binance.com`; if so, ingestion will fail and you can still run
   the tests and the CLI's non-data commands.
 
-## 2. Run the tests (225)
+## 2. Run the tests (241)
 
 ```bash
 pytest tests/ -q                     # full suite

@@ -5,7 +5,7 @@
 > the discipline and the negative results: across ~130 logged trials and 8 signal families, it found
 > **no production-ready alpha** — and proved it cleanly, cheaply, and reproducibly.
 
-**Status:** 225 tests passing · 129 trials logged (`trials/trials.csv`, append-only) · 0 deployable
+**Status:** 241 tests passing · 129 trials logged (`trials/trials.csv`, append-only) · 0 deployable
 strategies · 0 capital at risk · live trading **NOT approved** (`docs/NO_LIVE_DEPLOYMENT.md`).
 
 ---
@@ -64,7 +64,7 @@ mft/
   backtest/      vectorbt + event-driven + nautilus + survivorship harnesses
   alphas/, features/, portfolio/, risk/, monitoring/
 scripts/         runnable studies + research_cli.py (the automation entry point)
-tests/           225 tests (no-lookahead, parity, engine, crypto, funding, automation, ...)
+tests/           241 tests (no-lookahead, parity, engine, crypto, funding, automation, ...)
 docs/            PROJECT_SUMMARY, RESEARCH_VERDICT, HOW_TO_REPRODUCE, NO_LIVE_DEPLOYMENT, audits
 RESEARCH_LOG.md  the lab notebook — every phase, finding, and rejection, top to bottom
 trials/trials.csv  append-only trial ledger (never edited)
@@ -76,7 +76,7 @@ trials/trials.csv  append-only trial ledger (never edited)
 # install (editable, with dev deps)
 uv pip install -e ".[dev]"          # or: pip install -e ".[dev]"
 
-# run the full test suite (225 tests)
+# run the full test suite (241 tests)
 pytest tests/ -q
 
 # research/paper automation CLI (NO live trading)
@@ -108,6 +108,9 @@ luck and **flagged, never acted on**. See [`docs/NO_LIVE_DEPLOYMENT.md`](docs/NO
 | Paper-trading reports + ledgers | `reports/paper/`, `reports/paper/ledgers/` |
 | Weekly research reports | `reports/weekly/` |
 | Project review & verdict | `docs/project_review_current_state.md`, `docs/RESEARCH_VERDICT.md` |
+
+`results/` and `reports/` are generated artifacts and deliberately not committed — regenerate them
+locally by following [`docs/HOW_TO_REPRODUCE.md`](docs/HOW_TO_REPRODUCE.md).
 
 ## Documentation
 
