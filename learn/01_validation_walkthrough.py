@@ -204,7 +204,7 @@ for n in (1, 5, 10, 56):
     dsr = deflated_sharpe_ratio(book_sr, book.values, n_trials=n)
     print(f"    {n:<18}{hurdle:>18.3f}{dsr:>18.3f}")
 
-print(f"""
+print("""
 If you try N strategies, the BEST one looks good by luck alone — so the more you
 search, the higher the Sharpe you must clear. expected_max_sharpe(N) is that
 rising bar; DSR is the probability the edge is real after paying for the search.
