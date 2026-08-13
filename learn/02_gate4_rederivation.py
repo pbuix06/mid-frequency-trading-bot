@@ -90,7 +90,7 @@ book_sr = sharpe(book)
 book_dd = max_drawdown(book)
 best_sleeve = max(sharpe(df[c]) for c in df.columns)
 
-print(f"  inverse-vol weights: {dict(iv_w.round(2))}")
+print(f"  inverse-vol weights: {{{', '.join(f'{k}: {v:.2f}' for k, v in iv_w.items())}}}")
 print(f"  book Sharpe = {book_sr:.3f}   (best single sleeve: {best_sleeve:.3f})")
 print(f"  book MaxDD  = {book_dd:.2%}   (sleeves ranged to ~-50%)")
 assert abs(book_sr - 0.725) < 0.01, "book Sharpe should reproduce the recorded 0.73"
