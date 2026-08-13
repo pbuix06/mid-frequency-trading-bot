@@ -9,7 +9,7 @@
 > `docs/project_review_current_state.md` (sober checkpoint), `docs/RESEARCH_VERDICT.md`
 > (the conclusion), `trials/trials.csv` (the append-only ledger — never edited).
 >
-> Last updated: 2026-06-06. Trials logged: 129. Tests passing: 216.
+> Last updated: 2026-08-13. Trials logged: 129. Tests passing: 241.
 
 ---
 
@@ -20,7 +20,7 @@ These are the guardrails. Every finding below was produced under them.
 - **One code path.** The same `AlphaBase.compute_signal()` runs in backtest, paper, and
   live. No strategy is ever rewritten "for production."
 - **Count every trial.** Every backtest = one row in `trials/trials.csv`. Untracked
-  search = guaranteed overfit. We are at 53 trials.
+  search = guaranteed overfit. We are at 129 trials.
 - **Lock-box, hardcoded.**
   - Daily research: `LOCKBOX_CUTOFF = 2022-07-01`. Never read a daily bar after it.
   - Intraday research: `INTRADAY_LOCKBOX = 2023-07-01`. Never read a minute bar after it.
@@ -784,6 +784,29 @@ stop alpha hunting and return to strategy review"), **alpha hunting with current
 paused.** The durable deliverable is the **research factory, the validated data stack, the testing
 discipline (pre-registration + lock-box + regime validation), and the documented negative results.** See
 `docs/project_review_current_state.md` (Final retail-data MFT verdict).
+
+---
+
+## 20. Project banked as a research deliverable (2026-08-13)
+
+No new research since §19 — this entry closes the notebook. Actions taken:
+
+- **Repository published and finalized.** Public on GitHub with the honest framing: a research
+  system whose product is the validated negative result, not a trading bot. README, verdict,
+  summary, and reproduction docs brought current (241 tests; ledger at 129 trials, unchanged).
+- **`learn/` track completed (3 lessons).** `02_gate4_rederivation.py` re-derives the Gate 4
+  verdict end-to-end from raw sleeve returns + the frozen first-46-row ledger state (book 0.73,
+  luck bar 1.02, DSR 0.134, CPCV median 0.72 / frac+ 96%) with assertions against the recorded
+  numbers. `03_funding_autopsy.py` replays the funding rejection: the 25-trade crash-window
+  "edge" swings −0.7 → +15.3 bps/trade on rebalance grid phase alone; the pre-registered split
+  reproduces exactly (train −0.99 / val +1.86 / lock −10.04); regime attribution confirms all
+  profit sat in down months (+1140 vs −670 up / −1420 sideways). The validation checklist grew
+  from 6 to 8 questions (regime attribution, sample robustness). Lessons log nothing to the
+  ledger — re-examining recorded trials is free; only new configs spend budget.
+- **Standing decision (unchanged from §19 / the verdict):** no live trading; no further
+  free-data config mining; rejected branches stay rejected. The one un-falsified path remains
+  maker/liquidity provision on real order-book data — optionally seeded at zero cost by
+  recording Binance depth+trade streams forward before committing to that program.
 
 ---
 

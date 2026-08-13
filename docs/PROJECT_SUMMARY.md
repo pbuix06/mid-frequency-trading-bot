@@ -72,5 +72,5 @@ complete, honest record of what was tested and why it was rejected. Concretely:
 
 - `docs/RESEARCH_VERDICT.md` — the direct verdict.
 - `docs/project_review_current_state.md` — sober checkpoint with the full branch table.
-- `RESEARCH_LOG.md` — the complete chronological lab notebook (sections 0–19).
+- `RESEARCH_LOG.md` — the complete chronological lab notebook (sections 0–20).
 - `docs/HOW_TO_REPRODUCE.md` — how to re-run everything.
