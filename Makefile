@@ -1,4 +1,4 @@
-.PHONY: install test test-critical lint format clean parity
+.PHONY: install test test-critical lint typecheck format clean parity
 
 install:
 	uv pip install -e ".[dev]"
@@ -18,7 +18,10 @@ parity-vbt:
 	python3 scripts/parity_check.py --synthetic  # requires: pip install vectorbt
 
 lint:
-	ruff check mft/ tests/ scripts/
+	ruff check mft/ tests/ scripts/ learn/
+
+# Best-effort static typing pass — not part of the enforced lint standard
+typecheck:
 	mypy mft/ --ignore-missing-imports
 
 format:

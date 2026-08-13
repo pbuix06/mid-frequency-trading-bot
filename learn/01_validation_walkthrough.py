@@ -193,24 +193,25 @@ order book. Always ask "what fill did this assume?" before believing a number.
 
 # %% ──────────────────────────────────────────────────────────────────────────
 # LESSON 6 — Multiple testing: why trying more makes the bar HIGHER.
-banner("LESSON 6 — the Deflated Sharpe Ratio (why 56 trials raises the bar)")
+N_LOGGED = len(pd.read_csv(ROOT / "trials" / "trials.csv"))   # live count — never goes stale
+banner(f"LESSON 6 — the Deflated Sharpe Ratio (why {N_LOGGED} trials raises the bar)")
 
 _, _, book = book_sharpe(HIGH_BETA, entry_slippage_bps=0.0)
 book_sr = sharpe(book)
 print(f"  Optimistic high-beta book Sharpe = {book_sr:.3f}. Is it REAL or luck?\n")
 print(f"    {'trials tried (N)':<18}{'hurdle E[max SR]':>18}{'DSR (prob real)':>18}")
-for n in (1, 5, 10, 56):
+for n in (1, 5, 10, N_LOGGED):
     hurdle = expected_max_sharpe(n)                      # the bar, rises with N
     dsr = deflated_sharpe_ratio(book_sr, book.values, n_trials=n)
     print(f"    {n:<18}{hurdle:>18.3f}{dsr:>18.3f}")
 
-print("""
+print(f"""
 If you try N strategies, the BEST one looks good by luck alone — so the more you
 search, the higher the Sharpe you must clear. expected_max_sharpe(N) is that
 rising bar; DSR is the probability the edge is real after paying for the search.
 You need DSR >= 0.95 to advance (mft/validation/dsr.py). This is exactly why the
 daily book FAILED Gate 4 and why mining more variants is self-defeating: every new
-trial in trials/trials.csv (you're at 56) RAISES the bar for all of them.
+trial in trials/trials.csv (you're at {N_LOGGED}) RAISES the bar for all of them.
 
 (Calibration note, so you're not misled: the project's official Gate-4 DSR works in
 daily-Sharpe units with an empirically-estimated benchmark — see scripts/run_cpcv.py

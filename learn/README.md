@@ -19,7 +19,7 @@ Or step through it cell-by-cell in VS Code (click **Run Cell** above any `# %%`)
 
 | File | Teaches | The "aha" |
 |---|---|---|
-| `01_validation_walkthrough.py` | The full validation stack on one real edge (intraday ORB) | You re-derive a Sharpe by hand and it matches the harness; you watch costs and honest fills kill the edge; you see why 56 trials raises the bar; you see what leakage smells like. |
+| `01_validation_walkthrough.py` | The full validation stack on one real edge (intraday ORB) | You re-derive a Sharpe by hand and it matches the harness; you watch costs and honest fills kill the edge; you see why every logged trial raises the bar; you see what leakage smells like. |
 | `02_gate4_rederivation.py` | The Gate 4 verdict, re-derived from raw sleeves + the ledger | You rebuild the 4-sleeve book (Sharpe 0.73, half the drawdown — diversification works), reconstruct the luck bar (1.02) from the first 46 ledger rows, and compute DSR = 0.134 yourself — the exact recorded number that kept the gate shut. Plus: why re-running today fails even harder (N=129, polluted σ). |
 | `03_funding_autopsy.py` | How the discipline unmasked the project's best "edge" as crash beta | The +14 bps/trade funding signal: you show its 25-trade sample flips sign with the backtest clock's start hour, reproduce the pre-registered split that killed it (val +1.9 / lock −10.0), and prove via regime attribution that ALL profit sat in crash months. The checklist grows from 6 questions to 8. |
 
